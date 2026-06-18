@@ -292,9 +292,10 @@ export const TransactionHistory: React.FC = () => {
         )}
       </Card>
 
-      {/* Transactions Table Card */}
+      {/* Transactions Table/List Card */}
       <Card className="border border-neutral-150/40 dark:border-neutral-800 shadow-xs overflow-hidden p-0">
-        <div className="overflow-x-auto">
+        {/* Desktop Table View */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left border-collapse text-sm">
             <thead>
               <tr className="bg-neutral-50 dark:bg-neutral-850/50 border-b border-neutral-100 dark:border-neutral-850 text-xs font-bold text-neutral-450 dark:text-neutral-400 uppercase tracking-wider select-none">
@@ -411,6 +412,87 @@ export const TransactionHistory: React.FC = () => {
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile List View */}
+        <div className="block md:hidden divide-y divide-neutral-100 dark:divide-neutral-850 animate-enter">
+          {processedTransactions.length > 0 ? (
+            processedTransactions.map((tx) => {
+              const isPositive =
+                tx.type === 'credit' || (tx.type === 'adjustment' && tx.amount > 0);
+              const isTransfer = tx.type === 'transfer';
+
+              return (
+                <div key={tx.id} className="p-4 flex flex-col gap-2.5 hover:bg-neutral-50/20 dark:hover:bg-neutral-900/10 transition-colors">
+                  {/* Row 1: Date & Type */}
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-neutral-500 dark:text-neutral-400 font-mono font-medium">
+                      {tx.date}
+                    </span>
+                    {renderTypeBadge(tx.type)}
+                  </div>
+
+                  {/* Row 2: Fund Source/Dest & Amount */}
+                  <div className="flex justify-between items-center gap-2">
+                    <div className="text-sm text-neutral-850 dark:text-neutral-300 font-semibold truncate">
+                      {isTransfer ? (
+                        <div className="flex items-center gap-1.5 text-xs">
+                          <span className="px-1.5 py-0.5 rounded bg-neutral-100 dark:bg-neutral-800">
+                            {getFundName(tx.fundId)}
+                          </span>
+                          <span className="text-neutral-400">→</span>
+                          <span className="px-1.5 py-0.5 rounded bg-neutral-100 dark:bg-neutral-800">
+                            {getFundName((tx as any).toFundId)}
+                          </span>
+                        </div>
+                      ) : (
+                        <span>{getFundName((tx as any).fundId)}</span>
+                      )}
+                    </div>
+                    <div
+                      className={`text-sm font-bold font-mono whitespace-nowrap ${
+                        isTransfer
+                          ? 'text-neutral-600 dark:text-neutral-400'
+                          : isPositive
+                          ? 'text-emerald-600 dark:text-emerald-500'
+                          : 'text-rose-500 dark:text-rose-400'
+                      }`}
+                    >
+                      {isTransfer ? '' : isPositive ? '+' : '-'}
+                      {formatCurrency(Math.abs(tx.amount), currency)}
+                    </div>
+                  </div>
+
+                  {/* Row 3: Remarks and Actions */}
+                  <div className="flex justify-between items-center gap-4 border-t border-neutral-100/50 dark:border-neutral-850/30 pt-2">
+                    <div className="text-xs text-neutral-400 dark:text-neutral-450 truncate max-w-[70%]">
+                      {tx.notes || 'No notes'}
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        onClick={() => handleEditClick(tx)}
+                        className="p-1 rounded-lg text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800 hover:text-neutral-800 dark:hover:text-neutral-200 cursor-pointer"
+                        title="Edit"
+                      >
+                        <Edit2 className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteClick(tx.id)}
+                        className="p-1 rounded-lg text-neutral-500 hover:bg-rose-50 dark:hover:bg-rose-950/20 hover:text-rose-600 cursor-pointer"
+                        title="Delete"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          ) : (
+            <div className="p-8 text-center text-xs text-neutral-400 italic">
+              No transactions match the selected criteria.
+            </div>
+          )}
         </div>
       </Card>
 
