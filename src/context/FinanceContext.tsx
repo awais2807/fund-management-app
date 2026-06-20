@@ -15,6 +15,10 @@ interface FinanceContextType {
   isLoading: boolean;
   fundBalances: Record<string, number>;
   currentAccountBalance: number;
+  passcode: string | null;
+  isLocked: boolean;
+  setPasscode: (pin: string | null) => void;
+  unlockApp: (pin: string) => boolean;
   setupApp: (currency: string, initialBalances: Record<string, number>) => void;
   addTransaction: (tx: Omit<Transaction, 'id'>) => void;
   editTransaction: (id: string, tx: Omit<Transaction, 'id'>) => void;
@@ -105,6 +109,9 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [theme, setTheme] = useState<'light' | 'dark' | 'system'>('system');
   const [isFirstLaunch, setIsFirstLaunch] = useState<boolean>(true);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [passcode, setPasscodeState] = useState<string | null>(null);
+  const [isLocked, setIsLocked] = useState<boolean>(false);
+  const passcodeRef = React.useRef<string | null>(null);
 
   // Load data from IndexedDB (with LocalStorage migration fallback)
   useEffect(() => {
@@ -175,6 +182,14 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
           setCurrency(data.currency || '₹');
           setNotes(data.notes || '');
           setTheme(data.theme || 'system');
+          
+          const loadedPasscode = data.passcode || null;
+          setPasscodeState(loadedPasscode);
+          passcodeRef.current = loadedPasscode;
+          if (loadedPasscode) {
+            setIsLocked(true);
+          }
+          
           setIsFirstLaunch(false);
 
           // Save back if recurring engine ran
@@ -227,6 +242,7 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
       currency: updatedCurrency,
       theme: updatedTheme,
       recurringTransactions: updatedRecurring,
+      passcode: passcodeRef.current,
     };
     try {
       await setValue('finance_data', dataToSave);
@@ -532,6 +548,23 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     saveData(funds, transactions, reconciliations, reminders, currency, notes, newTheme, recurringTransactions, isFirstLaunch);
   };
 
+  const setPasscode = (pin: string | null) => {
+    setPasscodeState(pin);
+    passcodeRef.current = pin;
+    if (pin === null) {
+      setIsLocked(false);
+    }
+    saveData(funds, transactions, reconciliations, reminders, currency, notes, theme, recurringTransactions, isFirstLaunch);
+  };
+
+  const unlockApp = (pin: string): boolean => {
+    if (passcode === pin) {
+      setIsLocked(false);
+      return true;
+    }
+    return false;
+  };
+
   const resetData = async () => {
     setFunds([]);
     setTransactions([]);
@@ -541,6 +574,9 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setCurrency('₹');
     setNotes('');
     setTheme('system');
+    setPasscodeState(null);
+    passcodeRef.current = null;
+    setIsLocked(false);
     setIsFirstLaunch(true);
     try {
       await setValue('finance_data', null);
@@ -658,6 +694,10 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
         resetData,
         exportData,
         importData,
+        passcode,
+        isLocked,
+        setPasscode,
+        unlockApp,
       }}
     >
       {children}

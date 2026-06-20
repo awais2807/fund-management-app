@@ -14,6 +14,8 @@ import {
   ArrowDownRight,
   ArrowLeftRight,
   Scale,
+  FileSpreadsheet,
+  Printer,
 } from 'lucide-react';
 
 export const TransactionHistory: React.FC = () => {
@@ -48,6 +50,243 @@ export const TransactionHistory: React.FC = () => {
   const [editCategory, setEditCategory] = useState('Other');
 
   const activeFunds = useMemo(() => funds.filter((f) => !f.archived), [funds]);
+
+  const handleExportCSV = () => {
+    // Generate CSV content
+    const headers = ['Date', 'Type', 'Amount', 'Fund', 'To Fund (For Transfer)', 'Category', 'Notes'];
+    const rows = processedTransactions.map(t => {
+      const fundName = (t as any).fundId ? getFundName((t as any).fundId) : '';
+      const toFundName = (t as any).toFundId ? getFundName((t as any).toFundId) : '';
+      const typeLabel = t.type.toUpperCase();
+      const amountSign = t.type === 'expense' ? `-${t.amount}` : `${t.amount}`;
+      return [
+        t.date,
+        typeLabel,
+        amountSign,
+        fundName,
+        toFundName,
+        t.category || '',
+        `"${t.notes.replace(/"/g, '""')}"`
+      ];
+    });
+
+    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `finance_statement_${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handlePrintPDF = () => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      alert('Please allow popups to generate print statements.');
+      return;
+    }
+
+    const todayStr = new Date().toLocaleDateString();
+    
+    // Calculate statement totals
+    let totalCredits = 0;
+    let totalExpenses = 0;
+    processedTransactions.forEach(t => {
+      if (t.type === 'credit') totalCredits += t.amount;
+      else if (t.type === 'expense') totalExpenses += t.amount;
+      else if (t.type === 'adjustment') {
+        if (t.amount > 0) totalCredits += t.amount;
+        else totalExpenses += Math.abs(t.amount);
+      }
+    });
+
+    // Render print HTML
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Financial Statement - ${todayStr}</title>
+        <style>
+          body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            color: #171717;
+            padding: 40px;
+            font-size: 13px;
+            line-height: 1.5;
+          }
+          .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2px solid #e5e5e5;
+            padding-bottom: 20px;
+            margin-bottom: 30px;
+          }
+          .title {
+            font-size: 20px;
+            font-weight: 700;
+            margin: 0;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+          }
+          .subtitle {
+            font-size: 11px;
+            color: #737373;
+            margin-top: 5px;
+          }
+          .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+            margin-bottom: 35px;
+          }
+          .summary-card {
+            border: 1px solid #e5e5e5;
+            border-radius: 8px;
+            padding: 15px;
+            background-color: #fafafa;
+          }
+          .summary-card-title {
+            font-size: 9px;
+            text-transform: uppercase;
+            font-weight: bold;
+            color: #737373;
+            letter-spacing: 0.5px;
+          }
+          .summary-card-value {
+            font-size: 18px;
+            font-weight: 700;
+            margin-top: 5px;
+          }
+          .credits { color: #16a34a; }
+          .expenses { color: #dc2626; }
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+          }
+          th {
+            border-bottom: 2px solid #171717;
+            text-align: left;
+            padding: 8px 12px;
+            font-size: 10px;
+            text-transform: uppercase;
+            font-weight: bold;
+            color: #171717;
+          }
+          td {
+            border-bottom: 1px solid #e5e5e5;
+            padding: 10px 12px;
+            vertical-align: top;
+          }
+          .amount {
+            font-weight: 600;
+            text-align: right;
+          }
+          th.amount-header {
+            text-align: right;
+          }
+          .badge {
+            font-size: 9px;
+            font-weight: bold;
+            padding: 2px 6px;
+            border-radius: 4px;
+            text-transform: uppercase;
+            border: 1px solid #e5e5e5;
+            display: inline-block;
+          }
+          .notes {
+            color: #525252;
+            font-size: 12px;
+          }
+          @media print {
+            body { padding: 0; }
+            button { display: none; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <div>
+            <h1 class="title">Personal Treasury Statement</h1>
+            <div class="subtitle">Generated on ${todayStr} • Filtered Audit Record</div>
+          </div>
+          <div style="text-align: right;">
+            <div style="font-weight: bold; font-size: 14px;">Personal Finance</div>
+            <div class="subtitle">Secure Offline Ledger</div>
+          </div>
+        </div>
+
+        <div class="summary-grid">
+          <div class="summary-card">
+            <div class="summary-card-title">Total Credits</div>
+            <div class="summary-card-value credits">+${currency}${totalCredits.toFixed(2)}</div>
+          </div>
+          <div class="summary-card">
+            <div class="summary-card-title">Total Expenses</div>
+            <div class="summary-card-value expenses">-${currency}${totalExpenses.toFixed(2)}</div>
+          </div>
+          <div class="summary-card">
+            <div class="summary-card-title">Net Cash Flow</div>
+            <div class="summary-card-value ${(totalCredits - totalExpenses) >= 0 ? 'credits' : 'expenses'}">
+              ${(totalCredits - totalExpenses) >= 0 ? '+' : '-'}${currency}${Math.abs(totalCredits - totalExpenses).toFixed(2)}
+            </div>
+          </div>
+        </div>
+
+        <h3>Transaction Audit Log (${processedTransactions.length} records)</h3>
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 12%;">Date</th>
+              <th style="width: 10%;">Type</th>
+              <th style="width: 15%;">Fund</th>
+              <th style="width: 15%;">Category</th>
+              <th style="width: 35%;">Notes / Details</th>
+              <th style="width: 13%;" class="amount-header">Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${processedTransactions.map(t => {
+              const fundName = (t as any).fundId ? getFundName((t as any).fundId) : '';
+              const toFundName = (t as any).toFundId ? ` → ${getFundName((t as any).toFundId)}` : '';
+              const typeColor = t.type === 'credit' ? '#16a34a' : t.type === 'expense' ? '#dc2626' : '#2563eb';
+              
+              return `
+                <tr>
+                  <td style="font-family: monospace;">${t.date}</td>
+                  <td>
+                    <span class="badge" style="color: ${typeColor}; border-color: ${typeColor}20; background-color: ${typeColor}05">
+                      ${t.type}
+                    </span>
+                  </td>
+                  <td style="font-weight: 500;">${fundName}${toFundName}</td>
+                  <td><span class="badge">${t.category || 'Other'}</span></td>
+                  <td class="notes">${t.notes}</td>
+                  <td class="amount ${t.type === 'credit' ? 'credits' : t.type === 'expense' ? 'expenses' : ''}">
+                    ${t.type === 'credit' ? '+' : t.type === 'expense' ? '-' : ''}${currency}${t.amount.toFixed(2)}
+                  </td>
+                </tr>
+              `;
+            }).join('')}
+          </tbody>
+        </table>
+
+        <script>
+          window.onload = function() {
+            setTimeout(function() {
+              window.print();
+            }, 250);
+          }
+        </script>
+      </body>
+      </html>
+    `;
+
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
+  };
 
   // Handle Edit click
   const handleEditClick = (tx: Transaction) => {
@@ -214,10 +453,34 @@ export const TransactionHistory: React.FC = () => {
 
   return (
     <div className="flex flex-col gap-6 animate-enter">
-      {/* Title */}
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-neutral-900 dark:text-white">Transaction History</h1>
-        <p className="text-sm text-neutral-500 dark:text-neutral-400">Search, filter, and audit every monetary transaction.</p>
+      {/* Title & Action Buttons */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-neutral-900 dark:text-white">Transaction History</h1>
+          <p className="text-sm text-neutral-500 dark:text-neutral-400">Search, filter, and audit every monetary transaction.</p>
+        </div>
+        <div className="flex gap-2">
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={handleExportCSV} 
+            className="cursor-pointer text-neutral-700 dark:text-neutral-350 py-2 px-3 text-xs"
+            disabled={processedTransactions.length === 0}
+          >
+            <FileSpreadsheet className="h-4 w-4" />
+            Export CSV
+          </Button>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={handlePrintPDF} 
+            className="cursor-pointer text-neutral-700 dark:text-neutral-350 py-2 px-3 text-xs"
+            disabled={processedTransactions.length === 0}
+          >
+            <Printer className="h-4 w-4" />
+            Print Statement
+          </Button>
+        </div>
       </div>
 
       {/* Filters Card */}

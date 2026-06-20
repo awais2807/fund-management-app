@@ -88,4 +88,5 @@ export interface ExportData {
   currency: string;
   theme: 'light' | 'dark' | 'system';
   recurringTransactions?: RecurringTransaction[];
+  passcode?: string | null;
 }

@@ -7,11 +7,12 @@ import TransactionHistory from './components/TransactionHistory';
 import Analytics from './components/Analytics';
 import Settings from './components/Settings';
 import TransactionModal from './components/TransactionModal';
+import PasscodeLock from './components/PasscodeLock';
 import type { TransactionType } from './types';
 import { Plus } from 'lucide-react';
 
 function AppContent() {
-  const { isFirstLaunch } = useFinance();
+  const { isFirstLaunch, passcode, isLocked } = useFinance();
   const [activeTab, setActiveTab] = useState<'dashboard' | 'transactions' | 'analytics' | 'settings'>('dashboard');
 
   // Unified Transaction Modal State
@@ -27,6 +28,10 @@ function AppContent() {
 
   if (isFirstLaunch) {
     return <SetupWizard />;
+  }
+
+  if (passcode && isLocked) {
+    return <PasscodeLock />;
   }
 
   return (

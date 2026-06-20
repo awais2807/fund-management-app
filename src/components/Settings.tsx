@@ -20,6 +20,8 @@ import {
   FileCheck,
   Trash2,
   RefreshCw,
+  Shield,
+  Lock,
 } from 'lucide-react';
 
 export const Settings: React.FC = () => {
@@ -41,6 +43,8 @@ export const Settings: React.FC = () => {
     addRecurringTransaction,
     deleteRecurringTransaction,
     toggleRecurringTransaction,
+    passcode,
+    setPasscode,
   } = useFinance();
 
   // Active vs Archived funds
@@ -83,6 +87,16 @@ export const Settings: React.FC = () => {
   const [recFrequency, setRecFrequency] = useState<'daily' | 'weekly' | 'monthly' | 'yearly'>('monthly');
   const [recStartDate, setRecStartDate] = useState(new Date().toISOString().split('T')[0]);
   const [recNotes, setRecNotes] = useState('');
+
+  // Security Lock screen states
+  const [isSecurityModalOpen, setIsSecurityModalOpen] = useState(false);
+  const [pinInput, setPinInput] = useState('');
+  const [pinConfirmInput, setPinConfirmInput] = useState('');
+  const [pinError, setPinError] = useState('');
+
+  const [isDisableLockOpen, setIsDisableLockOpen] = useState(false);
+  const [disablePinInput, setDisablePinInput] = useState('');
+  const [disablePinError, setDisablePinError] = useState('');
 
   // Prefill default fund for recurring form
   React.useEffect(() => {
@@ -232,6 +246,40 @@ export const Settings: React.FC = () => {
       }
     };
     reader.readAsText(importFile);
+  };
+
+  const handleSetPasscodeSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setPinError('');
+
+    if (pinInput.length !== 4 || !/^\d{4}$/.test(pinInput)) {
+      setPinError('Passcode must be exactly 4 digits.');
+      return;
+    }
+
+    if (pinInput !== pinConfirmInput) {
+      setPinError('Passcodes do not match.');
+      return;
+    }
+
+    setPasscode(pinInput);
+    setIsSecurityModalOpen(false);
+    setPinInput('');
+    setPinConfirmInput('');
+  };
+
+  const handleDisablePasscodeSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setDisablePinError('');
+
+    if (disablePinInput !== passcode) {
+      setDisablePinError('Incorrect passcode.');
+      return;
+    }
+
+    setPasscode(null);
+    setIsDisableLockOpen(false);
+    setDisablePinInput('');
   };
 
   // 8. Reset Data Submit
@@ -675,6 +723,74 @@ export const Settings: React.FC = () => {
             </div>
           </Card>
 
+          {/* Security Passcode Card */}
+          <Card className="border border-neutral-150/40 dark:border-neutral-800 shadow-xs">
+            <h2 className="text-sm font-semibold text-neutral-800 dark:text-neutral-200 mb-4 flex items-center gap-2">
+              <Shield className="h-4.5 w-4.5 text-neutral-500" /> Security
+            </h2>
+            
+            <div className="flex flex-col gap-3">
+              <span className="text-xs text-neutral-500 dark:text-neutral-400 font-medium">
+                Protect your account data with a local 4-digit PIN lock.
+              </span>
+              
+              {passcode ? (
+                <div className="flex flex-col gap-2 mt-1">
+                  <div className="flex items-center gap-2 text-xs font-semibold text-emerald-600 dark:text-emerald-500 bg-emerald-50 dark:bg-emerald-950/20 p-2.5 rounded-xl border border-emerald-100 dark:border-emerald-900/30">
+                    <Lock className="h-4 w-4 shrink-0" />
+                    PIN protection is currently active.
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 mt-1">
+                    <Button 
+                      type="button"
+                      variant="outline" 
+                      onClick={() => {
+                        setPinInput('');
+                        setPinConfirmInput('');
+                        setPinError('');
+                        setIsSecurityModalOpen(true);
+                      }}
+                      className="py-2.5 text-xs justify-center"
+                    >
+                      Change PIN
+                    </Button>
+                    <Button 
+                      type="button"
+                      variant="secondary" 
+                      onClick={() => {
+                        setDisablePinInput('');
+                        setDisablePinError('');
+                        setIsDisableLockOpen(true);
+                      }}
+                      className="py-2.5 text-xs text-rose-500 hover:text-rose-600 dark:text-rose-450 dark:hover:text-rose-400 justify-center"
+                    >
+                      Disable PIN
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2 mt-1">
+                  <div className="text-xs text-neutral-400 dark:text-neutral-500 italic bg-neutral-50 dark:bg-neutral-900/50 p-2.5 rounded-xl border border-neutral-100 dark:border-neutral-850">
+                    PIN protection is currently disabled.
+                  </div>
+                  <Button 
+                    type="button"
+                    variant="primary" 
+                    onClick={() => {
+                      setPinInput('');
+                      setPinConfirmInput('');
+                      setPinError('');
+                      setIsSecurityModalOpen(true);
+                    }}
+                    className="w-full py-2.5 text-xs justify-center mt-1"
+                  >
+                    Enable PIN Lock
+                  </Button>
+                </div>
+              )}
+            </div>
+          </Card>
+
           {/* Backup & Restore Data Card */}
           <Card className="border border-neutral-150/40 dark:border-neutral-800 shadow-xs flex flex-col gap-4">
             <h2 className="text-sm font-semibold text-neutral-800 dark:text-neutral-200 flex items-center gap-2">
@@ -877,6 +993,99 @@ export const Settings: React.FC = () => {
               disabled={resetConfirmationText !== 'RESET'}
             >
               Destroy Data
+            </Button>
+          </div>
+        </form>
+      </Dialog>
+
+      {/* 3. Enable/Change Passcode Dialog */}
+      <Dialog isOpen={isSecurityModalOpen} onClose={() => setIsSecurityModalOpen(false)} title={passcode ? "Change Passcode Lock" : "Enable Passcode Lock"}>
+        <form onSubmit={handleSetPasscodeSubmit} className="flex flex-col gap-4">
+          <div className="text-xs text-neutral-500 dark:text-neutral-400 leading-normal">
+            Enter a 4-digit numeric code to protect your personal finance dashboard.
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <Input
+              type="password"
+              pattern="[0-9]*"
+              inputMode="numeric"
+              maxLength={4}
+              label="Enter 4-Digit PIN"
+              placeholder="e.g. 1234"
+              value={pinInput}
+              onChange={(e) => setPinInput(e.target.value.replace(/\D/g, '').slice(0, 4))}
+              required
+            />
+            <Input
+              type="password"
+              pattern="[0-9]*"
+              inputMode="numeric"
+              maxLength={4}
+              label="Confirm 4-Digit PIN"
+              placeholder="e.g. 1234"
+              value={pinConfirmInput}
+              onChange={(e) => setPinConfirmInput(e.target.value.replace(/\D/g, '').slice(0, 4))}
+              required
+            />
+          </div>
+
+          {pinError && (
+            <span className="text-xs text-rose-500 font-medium bg-rose-50 dark:bg-rose-955/15 p-2 rounded-lg border border-rose-100 dark:border-rose-900/30">
+              {pinError}
+            </span>
+          )}
+
+          <div className="flex justify-end gap-3 border-t border-neutral-100 dark:border-neutral-850/60 pt-4 mt-2">
+            <Button type="button" variant="secondary" onClick={() => setIsSecurityModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              disabled={pinInput.length !== 4 || pinConfirmInput.length !== 4}
+            >
+              Save Passcode
+            </Button>
+          </div>
+        </form>
+      </Dialog>
+
+      {/* 4. Disable Passcode Dialog */}
+      <Dialog isOpen={isDisableLockOpen} onClose={() => setIsDisableLockOpen(false)} title="Disable Passcode Lock">
+        <form onSubmit={handleDisablePasscodeSubmit} className="flex flex-col gap-4">
+          <div className="text-xs text-neutral-500 dark:text-neutral-400 leading-normal">
+            To disable PIN protection, please verify your current 4-digit passcode.
+          </div>
+
+          <Input
+            type="password"
+            pattern="[0-9]*"
+            inputMode="numeric"
+            maxLength={4}
+            label="Enter Current PIN"
+            placeholder="e.g. 1234"
+            value={disablePinInput}
+            onChange={(e) => setDisablePinInput(e.target.value.replace(/\D/g, '').slice(0, 4))}
+            required
+          />
+
+          {disablePinError && (
+            <span className="text-xs text-rose-500 font-medium bg-rose-50 dark:bg-rose-955/15 p-2 rounded-lg border border-rose-100 dark:border-rose-900/30">
+              {disablePinError}
+            </span>
+          )}
+
+          <div className="flex justify-end gap-3 border-t border-neutral-100 dark:border-neutral-850/60 pt-4 mt-2">
+            <Button type="button" variant="secondary" onClick={() => setIsDisableLockOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="danger"
+              disabled={disablePinInput.length !== 4}
+            >
+              Deactivate Protection
             </Button>
           </div>
         </form>
