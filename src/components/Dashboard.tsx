@@ -4,7 +4,7 @@ import { formatCurrency } from '../utils/helpers';
 import FundCard from './FundCard';
 import { Card, Button, Input, Select } from './ui/Common';
 import Dialog from './ui/Dialog';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
+import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import {
   TrendingUp,
   Plus,
@@ -50,6 +50,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ onOpenTransactionModal }) 
   const [reminderDate, setReminderDate] = useState('');
   const [reminderFundId, setReminderFundId] = useState('');
   const [reminderNotes, setReminderNotes] = useState('');
+
+  // Pie Chart hover/active state (prevent overlapping labels on mobile)
+  const [activePieIndex, setActivePieIndex] = useState<number | null>(null);
 
   // Filter out archived funds for dashboard display
   const activeFunds = useMemo(() => {
@@ -107,6 +110,22 @@ export const Dashboard: React.FC<DashboardProps> = ({ onOpenTransactionModal }) 
       }))
       .filter((d) => d.value > 0);
   }, [activeFunds, fundBalances]);
+
+  const centerText = useMemo(() => {
+    if (activePieIndex !== null && chartData[activePieIndex]) {
+      const item = chartData[activePieIndex];
+      return {
+        label: item.name,
+        value: formatCurrency(item.value, currency),
+        color: item.color,
+      };
+    }
+    return {
+      label: 'Total Balance',
+      value: formatCurrency(currentAccountBalance, currency),
+      color: undefined,
+    };
+  }, [activePieIndex, chartData, currentAccountBalance, currency]);
 
   // Reconcile Math
   const calculatedAppBalance = currentAccountBalance;
@@ -245,9 +264,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onOpenTransactionModal }) 
           </div>
           <span className="text-[10px] text-neutral-400 mt-2 block">For the current calendar month</span>
         </Card>
-      </div>
-
-      {/* Net Change Alert */}
+      </div>      {/* Net Change Alert */}
       <div
         className={`p-4 rounded-2xl flex items-center justify-between border ${
           monthlyStats.netChange >= 0
@@ -265,6 +282,30 @@ export const Dashboard: React.FC<DashboardProps> = ({ onOpenTransactionModal }) 
             overall this month.
           </div>
         </div>
+      </div>
+
+      {/* Fund Cards Section (Moved above overview per request) */}
+      <div>
+        <h2 className="text-xs font-bold uppercase tracking-wider text-neutral-450 dark:text-neutral-500 mb-4">Allocated Funds</h2>
+        {activeFunds.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {activeFunds.map((fund) => (
+              <FundCard
+                key={fund.id}
+                fund={fund}
+                balance={fundBalances[fund.id] || 0}
+                transactions={transactions}
+                totalAccountBalance={currentAccountBalance}
+                currency={currency}
+                onQuickAction={onOpenTransactionModal}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="p-12 text-center rounded-2xl border border-dashed border-neutral-200 dark:border-neutral-800">
+            <span className="text-sm text-neutral-400">No active funds found. Create one in Settings.</span>
+          </div>
+        )}
       </div>
 
       {/* Allocation bar & Pie Chart Section */}
@@ -330,16 +371,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ onOpenTransactionModal }) 
             <div className="w-full h-44 relative flex items-center justify-center">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
-                  <Tooltip
-                    formatter={(value: any) => [formatCurrency(value, currency), 'Balance']}
-                    contentStyle={{
-                      backgroundColor: 'rgba(30, 30, 30, 0.9)',
-                      border: 'none',
-                      borderRadius: '8px',
-                      color: '#fff',
-                      fontSize: '11px',
-                    }}
-                  />
                   <Pie
                     data={chartData}
                     cx="50%"
@@ -348,6 +379,16 @@ export const Dashboard: React.FC<DashboardProps> = ({ onOpenTransactionModal }) 
                     outerRadius={75}
                     paddingAngle={3}
                     dataKey="value"
+                    onMouseEnter={(_, index) => setActivePieIndex(index)}
+                    onMouseLeave={() => setActivePieIndex(null)}
+                    onClick={(_, index) => {
+                      if (activePieIndex === index) {
+                        setActivePieIndex(null);
+                      } else {
+                        setActivePieIndex(index);
+                      }
+                    }}
+                    className="focus:outline-none cursor-pointer"
                   >
                     {chartData.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={entry.color} />
@@ -355,44 +396,25 @@ export const Dashboard: React.FC<DashboardProps> = ({ onOpenTransactionModal }) 
                   </Pie>
                 </PieChart>
               </ResponsiveContainer>
-              <div className="absolute flex flex-col items-center justify-center">
-                <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wide leading-none">Total</span>
-                <span className="text-sm font-bold text-neutral-900 dark:text-white mt-1">
-                  {formatCurrency(currentAccountBalance, currency)}
+              <div className="absolute flex flex-col items-center justify-center pointer-events-none max-w-[85%] text-center">
+                <span 
+                  className="text-[9px] font-bold uppercase tracking-wider leading-none transition-colors duration-200"
+                  style={{ color: centerText.color || '#9ca3af' }}
+                >
+                  {centerText.label}
+                </span>
+                <span className="text-sm font-extrabold text-neutral-900 dark:text-white mt-1.5 break-all px-2 leading-tight">
+                  {centerText.value}
                 </span>
               </div>
             </div>
           ) : (
-            <div className="h-44 w-full flex flex-col items-center justify-center text-xs text-neutral-400 italic gap-1">
-              <HelpCircle className="h-6 w-6 text-neutral-300" />
+            <div className="h-44 w-full flex flex-col items-center justify-center text-xs text-neutral-450 italic gap-1">
+              <HelpCircle className="h-6 w-6 text-neutral-350" />
               No positive balances to plot
             </div>
           )}
         </Card>
-      </div>
-
-      {/* Fund Cards Section */}
-      <div>
-        <h2 className="text-sm font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400 mb-4">Allocated Funds</h2>
-        {activeFunds.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {activeFunds.map((fund) => (
-              <FundCard
-                key={fund.id}
-                fund={fund}
-                balance={fundBalances[fund.id] || 0}
-                transactions={transactions}
-                totalAccountBalance={currentAccountBalance}
-                currency={currency}
-                onQuickAction={onOpenTransactionModal}
-              />
-            ))}
-          </div>
-        ) : (
-          <div className="p-12 text-center rounded-2xl border border-dashed border-neutral-200 dark:border-neutral-800">
-            <span className="text-sm text-neutral-400">No active funds found. Create one in Settings.</span>
-          </div>
-        )}
       </div>
 
       {/* Budgets Overview Widget */}
