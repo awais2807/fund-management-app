@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useFinance } from '../context/FinanceContext';
+import { useFinance, CATEGORIES } from '../context/FinanceContext';
 import type { TransactionType } from '../types';
 import { Dialog } from './ui/Dialog';
 import { Button, Input, Select } from './ui/Common';
@@ -18,7 +18,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   initialType = 'credit',
   initialFundId,
 }) => {
-  const { funds, addTransaction } = useFinance();
+  const { funds, addTransaction, transactions, currency } = useFinance();
 
   // Selected tab state
   const [activeTab, setActiveTab] = useState<TransactionType>('credit');
@@ -27,6 +27,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   const [amount, setAmount] = useState('');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [notes, setNotes] = useState('');
+  const [category, setCategory] = useState('Other');
   
   // Fund selection
   const [fundId, setFundId] = useState('');
@@ -51,7 +52,6 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
 
       // Default destination to second active fund for transfers
       if (activeFunds.length > 1) {
-        // If initial fund matches first, pick second. Else pick first.
         const firstId = activeFunds[0].id;
         const secondId = activeFunds[1].id;
         setToFundId(initialFundId === firstId ? secondId : firstId);
@@ -66,6 +66,59 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
       setAdjustmentType('Correction Entry');
     }
   }, [isOpen, initialType, initialFundId, activeFunds]);
+
+  // Sync category defaults when tab changes
+  useEffect(() => {
+    if (activeTab === 'credit') {
+      setCategory('Salary & Income');
+    } else if (activeTab === 'expense') {
+      setCategory('Food & Dining');
+    } else {
+      setCategory('Other');
+    }
+  }, [activeTab]);
+
+  // Budget utilization check
+  const budgetWarning = useMemo(() => {
+    const isSpending = activeTab === 'expense' || (activeTab === 'adjustment' && parseFloat(amount) < 0);
+    if (!isSpending || !amount || !fundId) return null;
+
+    const selectedFund = funds.find((f) => f.id === fundId);
+    if (!selectedFund || !selectedFund.budget) return null;
+
+    const parsedAmount = Math.abs(parseFloat(amount)) || 0;
+    
+    // Find expenses for current calendar month
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth();
+
+    let currentMonthSpent = 0;
+    transactions.forEach((t) => {
+      if ((t as any).fundId !== fundId) return;
+      
+      const tDate = new Date(t.date);
+      if (tDate.getFullYear() === year && tDate.getMonth() === month) {
+        if (t.type === 'expense') {
+          currentMonthSpent += t.amount;
+        } else if (t.type === 'adjustment' && t.amount < 0) {
+          currentMonthSpent += Math.abs(t.amount);
+        }
+      }
+    });
+
+    const totalWithNew = currentMonthSpent + parsedAmount;
+    if (totalWithNew > selectedFund.budget) {
+      return {
+        fundName: selectedFund.name,
+        budget: selectedFund.budget,
+        spent: currentMonthSpent,
+        overflow: totalWithNew - selectedFund.budget,
+      };
+    }
+
+    return null;
+  }, [amount, fundId, activeTab, funds, transactions]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -89,6 +142,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
       amount: activeTab === 'adjustment' ? parsedAmount : Math.abs(parsedAmount),
       date,
       notes: notes.trim(),
+      category: (activeTab === 'credit' || activeTab === 'expense' || activeTab === 'adjustment') ? category : undefined,
     };
 
     let finalTx: any = { ...baseTx };
@@ -208,6 +262,29 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
               onChange={(e) => setAdjustmentType(e.target.value)}
               required
             />
+          )}
+
+          {/* Category selection */}
+          {(activeTab === 'credit' || activeTab === 'expense' || activeTab === 'adjustment') && (
+            <Select
+              label="Category"
+              options={CATEGORIES.map((cat) => ({ value: cat, label: cat }))}
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              required
+            />
+          )}
+
+          {/* Budget Overflow Alert Warning */}
+          {budgetWarning && (
+            <div className="p-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 rounded-xl flex flex-col gap-1 text-[11px] text-amber-800 dark:text-amber-400">
+              <span className="font-semibold flex items-center gap-1">
+                ⚠️ Budget Alert for {budgetWarning.fundName}
+              </span>
+              <span>
+                Monthly budget is <strong>{currency}{budgetWarning.budget}</strong>. You have already spent <strong>{currency}{budgetWarning.spent.toFixed(2)}</strong> this month. Recording this transaction will exceed your budget by <strong className="text-rose-600 dark:text-rose-400">{currency}{budgetWarning.overflow.toFixed(2)}</strong>.
+              </span>
+            </div>
           )}
 
           {/* Notes description */}

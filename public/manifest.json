@@ -1,0 +1,18 @@
+{
+  "short_name": "FundMgmt",
+  "name": "Personal Fund Management & Treasury",
+  "description": "Premium multi-fund financial accounting system with offline support and local budgets.",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#171717",
+  "theme_color": "#171717",
+  "display": "standalone",
+  "orientation": "portrait"
+}

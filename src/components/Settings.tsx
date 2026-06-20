@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { useFinance } from '../context/FinanceContext';
+import { useFinance, CATEGORIES } from '../context/FinanceContext';
 import type { Fund } from '../types';
 import { defaultPastelColors, fundIcons, getPastelStyles } from '../utils/helpers';
 import { Card, Button, Input, Select } from './ui/Common';
@@ -18,6 +18,8 @@ import {
   LayoutGrid,
   AlertTriangle,
   FileCheck,
+  Trash2,
+  RefreshCw,
 } from 'lucide-react';
 
 export const Settings: React.FC = () => {
@@ -35,6 +37,10 @@ export const Settings: React.FC = () => {
     resetData,
     exportData,
     importData,
+    recurringTransactions,
+    addRecurringTransaction,
+    deleteRecurringTransaction,
+    toggleRecurringTransaction,
   } = useFinance();
 
   // Active vs Archived funds
@@ -50,12 +56,14 @@ export const Settings: React.FC = () => {
   const [newFundName, setNewFundName] = useState('');
   const [newFundColor, setNewFundColor] = useState(defaultPastelColors[0]);
   const [newFundIcon, setNewFundIcon] = useState('Briefcase');
+  const [newFundBudget, setNewFundBudget] = useState('');
 
   // Edit Fund Modal State
   const [editingFund, setEditingFund] = useState<Fund | null>(null);
   const [editName, setEditName] = useState('');
   const [editColor, setEditColor] = useState('');
   const [editIcon, setEditIcon] = useState('');
+  const [editBudget, setEditBudget] = useState('');
 
   // Import State
   const [importFile, setImportFile] = useState<File | null>(null);
@@ -65,6 +73,44 @@ export const Settings: React.FC = () => {
   // Reset State
   const [resetConfirmationText, setResetConfirmationText] = useState('');
   const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
+
+  // Recurring Transactions States
+  const [recTitle, setRecTitle] = useState('');
+  const [recAmount, setRecAmount] = useState('');
+  const [recType, setRecType] = useState<'credit' | 'expense'>('expense');
+  const [recFundId, setRecFundId] = useState('');
+  const [recCategory, setRecCategory] = useState('Food & Dining');
+  const [recFrequency, setRecFrequency] = useState<'daily' | 'weekly' | 'monthly' | 'yearly'>('monthly');
+  const [recStartDate, setRecStartDate] = useState(new Date().toISOString().split('T')[0]);
+  const [recNotes, setRecNotes] = useState('');
+
+  // Prefill default fund for recurring form
+  React.useEffect(() => {
+    if (activeFunds.length > 0) {
+      setRecFundId(activeFunds[0].id);
+    }
+  }, [activeFunds]);
+
+  const handleAddRecurringSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const amt = parseFloat(recAmount);
+    if (!recTitle.trim() || isNaN(amt) || amt <= 0 || !recFundId || !recStartDate) return;
+
+    addRecurringTransaction({
+      title: recTitle.trim(),
+      amount: amt,
+      type: recType,
+      fundId: recFundId,
+      category: recCategory,
+      frequency: recFrequency,
+      startDate: recStartDate,
+      notes: recNotes.trim(),
+    });
+
+    setRecTitle('');
+    setRecAmount('');
+    setRecNotes('');
+  };
 
   // Currency States
   const currencyOptions = [
@@ -81,8 +127,15 @@ export const Settings: React.FC = () => {
   const handleAddFundSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newFundName.trim()) return;
-    addFund(newFundName.trim(), newFundColor, newFundIcon);
+    const budgetNum = parseFloat(newFundBudget);
+    addFund(
+      newFundName.trim(),
+      newFundColor,
+      newFundIcon,
+      !isNaN(budgetNum) && budgetNum > 0 ? budgetNum : undefined
+    );
     setNewFundName('');
+    setNewFundBudget('');
     // Pick next default color preset
     const nextColorIndex = (activeFunds.length + 1) % defaultPastelColors.length;
     setNewFundColor(defaultPastelColors[nextColorIndex]);
@@ -94,16 +147,19 @@ export const Settings: React.FC = () => {
     setEditName(fund.name);
     setEditColor(fund.color);
     setEditIcon(fund.icon);
+    setEditBudget(fund.budget ? fund.budget.toString() : '');
   };
 
   // 3. Edit Fund Submit
   const handleEditFundSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingFund || !editName.trim()) return;
+    const budgetNum = parseFloat(editBudget);
     updateFund(editingFund.id, {
       name: editName.trim(),
       color: editColor,
       icon: editIcon,
+      budget: !isNaN(budgetNum) && budgetNum > 0 ? budgetNum : undefined,
     });
     setEditingFund(null);
   };
@@ -351,6 +407,15 @@ export const Settings: React.FC = () => {
                 </div>
               </div>
 
+              <Input
+                type="number"
+                step="any"
+                label="Monthly Spending Budget Limit (Optional)"
+                placeholder="e.g. 1000.00"
+                value={newFundBudget}
+                onChange={(e) => setNewFundBudget(e.target.value)}
+              />
+
               <Button type="submit" variant="primary" className="py-2.5 mt-2 justify-center">
                 Create Fund
               </Button>
@@ -401,6 +466,175 @@ export const Settings: React.FC = () => {
               </div>
             </Card>
           )}
+
+          {/* Recurring Transactions Manager Card */}
+          <Card className="border border-neutral-100 dark:border-neutral-800 shadow-xs">
+            <h2 className="text-sm font-semibold text-neutral-800 dark:text-neutral-200 mb-4 flex items-center gap-2">
+              <RefreshCw className="h-4.5 w-4.5 text-neutral-500 dark:text-neutral-400" />
+              Recurring Transactions ({recurringTransactions.length})
+            </h2>
+
+            <div className="flex flex-col gap-5">
+              {/* Add Recurring Transaction Form */}
+              <form onSubmit={handleAddRecurringSubmit} className="p-4 rounded-xl border border-neutral-150/60 dark:border-neutral-850/80 bg-neutral-50/10 dark:bg-neutral-900/10 flex flex-col gap-4">
+                <h3 className="text-xs font-bold text-neutral-700 dark:text-neutral-300 uppercase tracking-wider">Schedule New Transaction</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <Input
+                    label="Transaction Title"
+                    placeholder="e.g. Netflix Subscription"
+                    value={recTitle}
+                    onChange={(e) => setRecTitle(e.target.value)}
+                    required
+                  />
+                  <Input
+                    type="number"
+                    step="any"
+                    label="Amount"
+                    placeholder="0.00"
+                    value={recAmount}
+                    onChange={(e) => setRecAmount(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <Select
+                    label="Transaction Type"
+                    value={recType}
+                    options={[
+                      { value: 'expense', label: 'Expense (Debit)' },
+                      { value: 'credit', label: 'Income (Credit)' },
+                    ]}
+                    onChange={(e) => setRecType(e.target.value as 'credit' | 'expense')}
+                  />
+                  <Select
+                    label="Target Fund"
+                    value={recFundId}
+                    options={activeFunds.map((f) => ({ value: f.id, label: f.name }))}
+                    onChange={(e) => setRecFundId(e.target.value)}
+                  />
+                  <Select
+                    label="Category"
+                    value={recCategory}
+                    options={CATEGORIES.map((c) => ({ value: c, label: c }))}
+                    onChange={(e) => setRecCategory(e.target.value)}
+                  />
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <Select
+                    label="Frequency"
+                    value={recFrequency}
+                    options={[
+                      { value: 'daily', label: 'Daily' },
+                      { value: 'weekly', label: 'Weekly' },
+                      { value: 'monthly', label: 'Monthly' },
+                      { value: 'yearly', label: 'Yearly' },
+                    ]}
+                    onChange={(e) => setRecFrequency(e.target.value as any)}
+                  />
+                  <Input
+                    type="date"
+                    label="Start Date"
+                    value={recStartDate}
+                    onChange={(e) => setRecStartDate(e.target.value)}
+                    required
+                  />
+                </div>
+                <Input
+                  label="Notes (Optional)"
+                  placeholder="e.g. Charged on 15th of every month"
+                  value={recNotes}
+                  onChange={(e) => setRecNotes(e.target.value)}
+                />
+                <Button type="submit" variant="primary" className="py-2.5 mt-1 justify-center">
+                  <Plus className="h-4 w-4" /> Schedule Transaction
+                </Button>
+              </form>
+
+              {/* List of Schedules */}
+              <div className="flex flex-col gap-3">
+                {recurringTransactions.length === 0 ? (
+                  <div className="text-center py-8 border border-dashed border-neutral-200 dark:border-neutral-800 rounded-xl bg-neutral-50/30 dark:bg-neutral-900/10">
+                    <span className="text-xs text-neutral-450 dark:text-neutral-500 font-medium">No recurring transactions scheduled yet.</span>
+                  </div>
+                ) : (
+                  recurringTransactions.map((rec) => {
+                    const associatedFund = funds.find((f) => f.id === rec.fundId);
+                    const fundColor = associatedFund?.color || '#cbd5e1';
+                    const fundName = associatedFund?.name || 'Unknown Fund';
+
+                    return (
+                      <div
+                        key={rec.id}
+                        className={`p-4 rounded-xl border flex flex-col md:flex-row md:items-center justify-between gap-4 transition-all ${
+                          rec.active
+                            ? 'border-neutral-150/70 dark:border-neutral-800/80 bg-neutral-50/20 dark:bg-neutral-900/10'
+                            : 'border-neutral-100 dark:border-neutral-850 bg-neutral-100/5 dark:bg-neutral-950/5 opacity-60'
+                        }`}
+                      >
+                        <div className="flex flex-col gap-1.5 min-w-0">
+                          <div className="flex items-center gap-2.5 flex-wrap">
+                            <span className="font-semibold text-sm text-neutral-800 dark:text-neutral-200 truncate">
+                              {rec.title}
+                            </span>
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${
+                              rec.type === 'credit'
+                                ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400 border border-emerald-100/30'
+                                : 'bg-rose-50 text-rose-600 dark:bg-rose-955/20 dark:text-rose-400 border border-rose-100/30'
+                            }`}>
+                              {rec.type === 'credit' ? '+' : '-'}{currency}{rec.amount.toFixed(2)}
+                            </span>
+                            <span className="text-[10px] font-bold text-neutral-500 bg-neutral-100 dark:bg-neutral-800 px-2 py-0.5 rounded-full border border-neutral-200/20 capitalize shrink-0">
+                              {rec.frequency}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-3 text-xs text-neutral-450 dark:text-neutral-555 flex-wrap">
+                            <span className="flex items-center gap-1.5">
+                              <span className="h-2 w-2 rounded-full" style={{ backgroundColor: fundColor }} />
+                              {fundName}
+                            </span>
+                            <span className="text-[11px] font-medium px-1.5 py-0.25 bg-neutral-100 dark:bg-neutral-850 rounded text-neutral-500 dark:text-neutral-400">
+                              {rec.category}
+                            </span>
+                            <span className="font-mono text-[11px]">
+                              Next run: {rec.nextDate}
+                            </span>
+                          </div>
+                          {rec.notes && (
+                            <span className="text-xs text-neutral-450 italic mt-0.5 truncate">{rec.notes}</span>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-2 self-end md:self-center shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => toggleRecurringTransaction(rec.id)}
+                            className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors cursor-pointer ${
+                              rec.active
+                                ? 'bg-emerald-50/10 text-emerald-600 border-emerald-200/50 hover:bg-emerald-50/20 dark:text-emerald-400 dark:border-emerald-900/30'
+                                : 'bg-neutral-100/30 text-neutral-500 border-neutral-200 dark:bg-neutral-800/30 dark:text-neutral-400 dark:border-neutral-800 hover:bg-neutral-100/50'
+                            }`}
+                          >
+                            {rec.active ? 'Active' : 'Paused'}
+                          </button>
+                          <Button
+                            size="sm"
+                            type="button"
+                            variant="ghost"
+                            onClick={() => deleteRecurringTransaction(rec.id)}
+                            className="text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-955/20 hover:text-rose-600 p-2 rounded-lg"
+                            title="Delete Schedule"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          </Card>
         </div>
 
         {/* Right Section: System Preference and Backup & Restore */}
@@ -593,6 +827,15 @@ export const Settings: React.FC = () => {
                 })}
               </div>
             </div>
+
+            <Input
+              type="number"
+              step="any"
+              label="Monthly Spending Budget Limit (Optional)"
+              placeholder="e.g. 500.00 (leave blank for no budget)"
+              value={editBudget}
+              onChange={(e) => setEditBudget(e.target.value)}
+            />
 
             <div className="flex justify-end gap-3 border-t border-neutral-100 dark:border-neutral-850/60 pt-4 mt-2">
               <Button type="button" variant="secondary" onClick={() => setEditingFund(null)}>

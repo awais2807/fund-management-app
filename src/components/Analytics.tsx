@@ -105,6 +105,36 @@ export const Analytics: React.FC = () => {
       .filter((d) => d.value > 0);
   }, [activeFunds, fundBalances]);
 
+  // 3b. Spending by Category data (Current calendar month)
+  const categoryData = useMemo(() => {
+    const categoriesSum: Record<string, number> = {};
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth();
+
+    transactions.forEach((t) => {
+      const tDate = new Date(t.date);
+      if (tDate.getFullYear() === currentYear && tDate.getMonth() === currentMonth) {
+        const isSpending = t.type === 'expense' || (t.type === 'adjustment' && t.amount < 0);
+        if (isSpending) {
+          const cat = t.category || 'Other';
+          const amt = Math.abs(t.amount);
+          categoriesSum[cat] = (categoriesSum[cat] || 0) + amt;
+        }
+      }
+    });
+
+    const colors = ['#FF8042', '#0088FE', '#00C49F', '#FFBB28', '#8884d8', '#8dd1e1', '#a4de6c', '#d0ed57', '#83a6ed'];
+    return Object.keys(categoriesSum)
+      .map((name, i) => ({
+        name,
+        value: categoriesSum[name],
+        color: colors[i % colors.length],
+      }))
+      .filter((d) => d.value > 0)
+      .sort((a, b) => b.value - a.value);
+  }, [transactions]);
+
   // 4. Fund-wise monthly summaries (Credits vs Expenses for current month)
   const fundMonthlySummaries = useMemo(() => {
     const summaries: Record<string, { income: number; expenses: number; net: number }> = {};
@@ -377,6 +407,59 @@ export const Analytics: React.FC = () => {
             <div className="h-64 flex flex-col items-center justify-center text-xs text-neutral-400 italic gap-1">
               <HelpCircle className="h-6 w-6 text-neutral-300" />
               No funds have positive balances.
+            </div>
+          )}
+        </Card>
+
+        {/* Chart 5: Category Spending Share Donut */}
+        <Card className="border border-neutral-150/40 dark:border-neutral-800 shadow-xs flex flex-col items-center justify-between p-6">
+          <h2 className="text-sm font-semibold text-neutral-800 dark:text-neutral-200 self-start mb-4">
+            Spending by Category ({currentMonthLabel})
+          </h2>
+          {categoryData.length > 0 ? (
+            <div className="w-full h-64 relative flex items-center justify-center">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Tooltip
+                    formatter={(value: any) => [formatCurrency(value, currency), 'Spending']}
+                    contentStyle={{
+                      backgroundColor: 'rgba(30, 30, 30, 0.95)',
+                      border: 'none',
+                      borderRadius: '8px',
+                      color: '#fff',
+                      fontSize: '11px',
+                    }}
+                  />
+                  <Pie
+                    data={categoryData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={65}
+                    outerRadius={95}
+                    paddingAngle={4}
+                    dataKey="value"
+                  >
+                    {categoryData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Legend wrapperStyle={{ fontSize: '10px' }} />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="absolute flex flex-col items-center justify-center">
+                <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Spent</span>
+                <span className="text-lg font-extrabold text-neutral-850 dark:text-white leading-tight mt-1">
+                  {formatCurrency(
+                    categoryData.reduce((sum, d) => sum + d.value, 0),
+                    currency
+                  )}
+                </span>
+              </div>
+            </div>
+          ) : (
+            <div className="h-64 flex flex-col items-center justify-center text-xs text-neutral-400 italic gap-1">
+              <HelpCircle className="h-6 w-6 text-neutral-300" />
+              No spending logged in this calendar month.
             </div>
           )}
         </Card>

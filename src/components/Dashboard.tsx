@@ -395,6 +395,64 @@ export const Dashboard: React.FC<DashboardProps> = ({ onOpenTransactionModal }) 
         )}
       </div>
 
+      {/* Budgets Overview Widget */}
+      {funds.some((f) => !f.archived && f.budget && f.budget > 0) && (
+        <Card className="border border-neutral-150/40 dark:border-neutral-800 shadow-xs p-6">
+          <h2 className="text-sm font-semibold text-neutral-800 dark:text-neutral-200 mb-4">Monthly Budgets Utilization</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {funds
+              .filter((f) => !f.archived && f.budget && f.budget > 0)
+              .map((f) => {
+                const now = new Date();
+                const year = now.getFullYear();
+                const month = now.getMonth();
+                const spent = transactions
+                  .filter((t) => {
+                    if ((t as any).fundId !== f.id) return false;
+                    const tDate = new Date(t.date);
+                    return (
+                      tDate.getFullYear() === year &&
+                      tDate.getMonth() === month &&
+                      (t.type === 'expense' || (t.type === 'adjustment' && t.amount < 0))
+                    );
+                  })
+                  .reduce((sum, t) => sum + Math.abs(t.amount), 0);
+
+                const pct = f.budget ? (spent / f.budget) * 100 : 0;
+                const isOver = f.budget ? spent > f.budget : false;
+
+                return (
+                  <div key={f.id} className="p-4 rounded-xl border border-neutral-100 dark:border-neutral-850 bg-neutral-50/20 dark:bg-neutral-900/10 flex flex-col gap-2.5">
+                    <div className="flex justify-between items-center">
+                      <span className="font-semibold text-sm text-neutral-800 dark:text-neutral-200 flex items-center gap-2">
+                        <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: f.color }} />
+                        {f.name}
+                      </span>
+                      <span className={`text-xs font-bold ${isOver ? 'text-rose-500' : 'text-neutral-550 dark:text-neutral-400'}`}>
+                        {pct.toFixed(0)}%
+                      </span>
+                    </div>
+
+                    <div className="w-full bg-neutral-150 dark:bg-neutral-800 h-2 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all duration-300 ${
+                          isOver ? 'bg-rose-500' : pct >= 75 ? 'bg-amber-500' : 'bg-emerald-500'
+                        }`}
+                        style={{ width: `${Math.min(100, pct)}%` }}
+                      />
+                    </div>
+
+                    <div className="flex justify-between text-[10px] text-neutral-400 dark:text-neutral-400">
+                      <span>Spent: {formatCurrency(spent, currency)}</span>
+                      <span>Budget: {formatCurrency(f.budget || 0, currency)}</span>
+                    </div>
+                  </div>
+                );
+              })}
+          </div>
+        </Card>
+      )}
+
       {/* Grid for Reminders, Notes, and Recent Activity */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         

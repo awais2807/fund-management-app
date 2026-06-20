@@ -1,22 +1,25 @@
 import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
-import type { Fund, Transaction, ReconciliationRecord, Reminder, ExportData } from '../types';
+import type { Fund, Transaction, ReconciliationRecord, Reminder, RecurringTransaction, ExportData } from '../types';
+import { getValue, setValue } from '../utils/db';
 
 interface FinanceContextType {
   funds: Fund[];
   transactions: Transaction[];
   reconciliations: ReconciliationRecord[];
   reminders: Reminder[];
+  recurringTransactions: RecurringTransaction[];
   currency: string;
   notes: string;
   theme: 'light' | 'dark' | 'system';
   isFirstLaunch: boolean;
+  isLoading: boolean;
   fundBalances: Record<string, number>;
   currentAccountBalance: number;
   setupApp: (currency: string, initialBalances: Record<string, number>) => void;
   addTransaction: (tx: Omit<Transaction, 'id'>) => void;
   editTransaction: (id: string, tx: Omit<Transaction, 'id'>) => void;
   deleteTransaction: (id: string) => void;
-  addFund: (name: string, color: string, icon: string) => void;
+  addFund: (name: string, color: string, icon: string, budget?: number) => void;
   updateFund: (id: string, updates: Partial<Omit<Fund, 'id'>>) => void;
   archiveFund: (id: string) => boolean;
   restoreFund: (id: string) => void;
@@ -31,6 +34,9 @@ interface FinanceContextType {
   addReminder: (reminder: Omit<Reminder, 'id' | 'completed'>) => void;
   payReminder: (id: string) => void;
   deleteReminder: (id: string) => void;
+  addRecurringTransaction: (recurring: Omit<RecurringTransaction, 'id' | 'nextDate' | 'active'>) => void;
+  deleteRecurringTransaction: (id: string) => void;
+  toggleRecurringTransaction: (id: string) => void;
   updateNotes: (notes: string) => void;
   updateCurrency: (currency: string) => void;
   updateTheme: (theme: 'light' | 'dark' | 'system') => void;
@@ -44,6 +50,18 @@ const FinanceContext = createContext<FinanceContextType | undefined>(undefined);
 const LOCAL_STORAGE_KEY = 'personal_finance_data';
 const DATA_VERSION = 1;
 
+export const CATEGORIES = [
+  'Food & Dining',
+  'Utilities & Bills',
+  'Entertainment',
+  'Shopping',
+  'Housing & Rent',
+  'Travel & Transit',
+  'Healthcare',
+  'Salary & Income',
+  'Other',
+];
+
 export const generateUUID = (): string => {
   if (typeof window !== 'undefined' && window.crypto && window.crypto.randomUUID) {
     return window.crypto.randomUUID();
@@ -55,37 +73,139 @@ export const generateUUID = (): string => {
   });
 };
 
-const loadInitialData = (): ExportData | null => {
-  if (typeof window === 'undefined') return null;
-  const rawData = localStorage.getItem(LOCAL_STORAGE_KEY);
-  if (rawData) {
-    try {
-      const parsed = JSON.parse(rawData) as ExportData;
-      if (parsed && parsed.version === DATA_VERSION) {
-        return parsed;
-      }
-    } catch (e) {
-      console.error('Failed to parse financial data from localStorage', e);
-    }
+export const advanceDate = (dateStr: string, frequency: 'daily' | 'weekly' | 'monthly' | 'yearly'): string => {
+  const date = new Date(dateStr);
+  if (isNaN(date.getTime())) return dateStr;
+
+  switch (frequency) {
+    case 'daily':
+      date.setDate(date.getDate() + 1);
+      break;
+    case 'weekly':
+      date.setDate(date.getDate() + 7);
+      break;
+    case 'monthly':
+      date.setMonth(date.getMonth() + 1);
+      break;
+    case 'yearly':
+      date.setFullYear(date.getFullYear() + 1);
+      break;
   }
-  return null;
+  return date.toISOString().split('T')[0];
 };
 
 export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Load data synchronously on initial render to prevent state lag
-  const initialData = React.useMemo(() => loadInitialData(), []);
+  const [funds, setFunds] = useState<Fund[]>([]);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [reconciliations, setReconciliations] = useState<ReconciliationRecord[]>([]);
+  const [reminders, setReminders] = useState<Reminder[]>([]);
+  const [recurringTransactions, setRecurringTransactions] = useState<RecurringTransaction[]>([]);
+  const [currency, setCurrency] = useState<string>('₹');
+  const [notes, setNotes] = useState<string>('');
+  const [theme, setTheme] = useState<'light' | 'dark' | 'system'>('system');
+  const [isFirstLaunch, setIsFirstLaunch] = useState<boolean>(true);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
 
-  const [funds, setFunds] = useState<Fund[]>(() => initialData?.funds || []);
-  const [transactions, setTransactions] = useState<Transaction[]>(() => initialData?.transactions || []);
-  const [reconciliations, setReconciliations] = useState<ReconciliationRecord[]>(() => initialData?.reconciliations || []);
-  const [reminders, setReminders] = useState<Reminder[]>(() => initialData?.reminders || []);
-  const [currency, setCurrency] = useState<string>(() => initialData?.currency || '₹');
-  const [notes, setNotes] = useState<string>(() => initialData?.notes || '');
-  const [theme, setTheme] = useState<'light' | 'dark' | 'system'>(() => initialData?.theme || 'system');
-  const [isFirstLaunch, setIsFirstLaunch] = useState<boolean>(() => !initialData);
+  // Load data from IndexedDB (with LocalStorage migration fallback)
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        let data = await getValue<ExportData>('finance_data');
 
-  // Save data to localStorage when state changes (only if not first launch or setup done)
-  const saveData = (
+        // Migration logic
+        if (!data) {
+          const rawLocal = localStorage.getItem(LOCAL_STORAGE_KEY);
+          if (rawLocal) {
+            try {
+              const parsed = JSON.parse(rawLocal) as ExportData;
+              if (parsed && parsed.version === DATA_VERSION) {
+                data = parsed;
+                await setValue('finance_data', parsed);
+                localStorage.removeItem(LOCAL_STORAGE_KEY); // Clean up
+                console.log('Successfully migrated from LocalStorage to IndexedDB');
+              }
+            } catch (e) {
+              console.error('LocalStorage migration failed:', e);
+            }
+          }
+        }
+
+        if (data) {
+          let updatedTransactions = [...(data.transactions || [])];
+          let updatedRecurring = [...(data.recurringTransactions || [])];
+          let scheduleModified = false;
+          const currentDateStr = new Date().toISOString().split('T')[0];
+
+          // Recurring Transactions Engine execution loop
+          updatedRecurring = updatedRecurring.map((rec) => {
+            if (!rec.active) return rec;
+
+            let nextDate = rec.nextDate;
+            let recurringModified = false;
+            const newTxs: Transaction[] = [];
+
+            while (nextDate <= currentDateStr) {
+              const tx: Transaction = {
+                id: generateUUID(),
+                type: rec.type,
+                amount: rec.amount,
+                date: nextDate,
+                notes: `Recurring: ${rec.title}${rec.notes ? ` (${rec.notes})` : ''}`,
+                fundId: rec.fundId,
+                category: rec.category,
+              };
+              newTxs.push(tx);
+              nextDate = advanceDate(nextDate, rec.frequency);
+              recurringModified = true;
+            }
+
+            if (recurringModified) {
+              updatedTransactions = [...newTxs, ...updatedTransactions];
+              scheduleModified = true;
+              return { ...rec, nextDate };
+            }
+            return rec;
+          });
+
+          setFunds(data.funds || []);
+          setTransactions(updatedTransactions);
+          setReconciliations(data.reconciliations || []);
+          setReminders(data.reminders || []);
+          setRecurringTransactions(updatedRecurring);
+          setCurrency(data.currency || '₹');
+          setNotes(data.notes || '');
+          setTheme(data.theme || 'system');
+          setIsFirstLaunch(false);
+
+          // Save back if recurring engine ran
+          if (scheduleModified) {
+            const updatedData: ExportData = {
+              version: DATA_VERSION,
+              funds: data.funds || [],
+              transactions: updatedTransactions,
+              reconciliations: data.reconciliations || [],
+              reminders: data.reminders || [],
+              notes: data.notes || '',
+              currency: data.currency || '₹',
+              theme: data.theme || 'system',
+              recurringTransactions: updatedRecurring,
+            };
+            await setValue('finance_data', updatedData);
+          }
+        } else {
+          setIsFirstLaunch(true);
+        }
+      } catch (err) {
+        console.error('Error opening IndexedDB:', err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadData();
+  }, []);
+
+  const saveData = async (
     updatedFunds: Fund[],
     updatedTransactions: Transaction[],
     updatedReconciliations: ReconciliationRecord[],
@@ -93,6 +213,7 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     updatedCurrency: string,
     updatedNotes: string,
     updatedTheme: 'light' | 'dark' | 'system',
+    updatedRecurring: RecurringTransaction[],
     firstLaunchState: boolean
   ) => {
     if (firstLaunchState) return;
@@ -105,8 +226,13 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
       notes: updatedNotes,
       currency: updatedCurrency,
       theme: updatedTheme,
+      recurringTransactions: updatedRecurring,
     };
-    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(dataToSave));
+    try {
+      await setValue('finance_data', dataToSave);
+    } catch (e) {
+      console.error('Failed to save state to IndexedDB:', e);
+    }
   };
 
   // Dynamic calculations
@@ -139,15 +265,14 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, [funds, fundBalances]);
 
   // Setup Wizard
-  const setupApp = (selectedCurrency: string, initialBalances: Record<string, number>) => {
+  const setupApp = async (selectedCurrency: string, initialBalances: Record<string, number>) => {
     const today = new Date().toISOString().split('T')[0];
-    
-    // Create Default Funds
+
     const defaultFunds: Fund[] = [
       {
         id: generateUUID(),
         name: 'Project Fund',
-        color: '#BAD7E9', // Pastel Blue
+        color: '#BAD7E9',
         icon: 'Briefcase',
         order: 0,
         archived: false,
@@ -156,7 +281,7 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
       {
         id: generateUUID(),
         name: 'Home Fund',
-        color: '#C1E1C1', // Pastel Green
+        color: '#C1E1C1',
         icon: 'Home',
         order: 1,
         archived: false,
@@ -165,7 +290,7 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
       {
         id: generateUUID(),
         name: 'Personal Fund',
-        color: '#FFD1B3', // Pastel Peach
+        color: '#FFD1B3',
         icon: 'User',
         order: 2,
         archived: false,
@@ -173,7 +298,6 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
       },
     ];
 
-    // Create Opening Balance transactions
     const initialTransactions: Transaction[] = [];
     defaultFunds.forEach((f) => {
       let balanceKey = '';
@@ -190,6 +314,7 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
           date: today,
           notes: 'Opening Balance',
           fundId: f.id,
+          category: 'Salary & Income',
         });
       }
     });
@@ -199,7 +324,6 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setCurrency(selectedCurrency);
     setIsFirstLaunch(false);
 
-    // Save directly
     const dataToSave: ExportData = {
       version: DATA_VERSION,
       funds: defaultFunds,
@@ -209,8 +333,9 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
       notes: '',
       currency: selectedCurrency,
       theme,
+      recurringTransactions: [],
     };
-    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(dataToSave));
+    await setValue('finance_data', dataToSave);
   };
 
   // Transaction Actions
@@ -218,23 +343,23 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const newTx = { ...tx, id: generateUUID() } as Transaction;
     const updated = [newTx, ...transactions];
     setTransactions(updated);
-    saveData(funds, updated, reconciliations, reminders, currency, notes, theme, isFirstLaunch);
+    saveData(funds, updated, reconciliations, reminders, currency, notes, theme, recurringTransactions, isFirstLaunch);
   };
 
   const editTransaction = (id: string, updatedTx: Omit<Transaction, 'id'>) => {
     const updated = transactions.map((t) => (t.id === id ? ({ ...updatedTx, id } as Transaction) : t));
     setTransactions(updated);
-    saveData(funds, updated, reconciliations, reminders, currency, notes, theme, isFirstLaunch);
+    saveData(funds, updated, reconciliations, reminders, currency, notes, theme, recurringTransactions, isFirstLaunch);
   };
 
   const deleteTransaction = (id: string) => {
     const updated = transactions.filter((t) => t.id !== id);
     setTransactions(updated);
-    saveData(funds, updated, reconciliations, reminders, currency, notes, theme, isFirstLaunch);
+    saveData(funds, updated, reconciliations, reminders, currency, notes, theme, recurringTransactions, isFirstLaunch);
   };
 
   // Fund Actions
-  const addFund = (name: string, color: string, icon: string) => {
+  const addFund = (name: string, color: string, icon: string, budget?: number) => {
     const newFund: Fund = {
       id: generateUUID(),
       name,
@@ -243,40 +368,40 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
       order: funds.length,
       archived: false,
       createdAt: new Date().toISOString(),
+      budget,
     };
     const updated = [...funds, newFund];
     setFunds(updated);
-    saveData(updated, transactions, reconciliations, reminders, currency, notes, theme, isFirstLaunch);
+    saveData(updated, transactions, reconciliations, reminders, currency, notes, theme, recurringTransactions, isFirstLaunch);
   };
 
   const updateFund = (id: string, updates: Partial<Omit<Fund, 'id'>>) => {
     const updated = funds.map((f) => (f.id === id ? { ...f, ...updates } : f));
     setFunds(updated);
-    saveData(updated, transactions, reconciliations, reminders, currency, notes, theme, isFirstLaunch);
+    saveData(updated, transactions, reconciliations, reminders, currency, notes, theme, recurringTransactions, isFirstLaunch);
   };
 
   const archiveFund = (id: string): boolean => {
-    // Check if we have at least one OTHER active fund
     const activeFunds = funds.filter((f) => !f.archived && f.id !== id);
     if (activeFunds.length === 0) {
-      return false; // Cannot archive the last active fund
+      return false;
     }
     const updated = funds.map((f) => (f.id === id ? { ...f, archived: true } : f));
     setFunds(updated);
-    saveData(updated, transactions, reconciliations, reminders, currency, notes, theme, isFirstLaunch);
+    saveData(updated, transactions, reconciliations, reminders, currency, notes, theme, recurringTransactions, isFirstLaunch);
     return true;
   };
 
   const restoreFund = (id: string) => {
     const updated = funds.map((f) => (f.id === id ? { ...f, archived: false } : f));
     setFunds(updated);
-    saveData(updated, transactions, reconciliations, reminders, currency, notes, theme, isFirstLaunch);
+    saveData(updated, transactions, reconciliations, reminders, currency, notes, theme, recurringTransactions, isFirstLaunch);
   };
 
   const reorderFunds = (reordered: Fund[]) => {
     const updated = reordered.map((f, index) => ({ ...f, order: index }));
     setFunds(updated);
-    saveData(updated, transactions, reconciliations, reminders, currency, notes, theme, isFirstLaunch);
+    saveData(updated, transactions, reconciliations, reminders, currency, notes, theme, recurringTransactions, isFirstLaunch);
   };
 
   // Reconciliation Actions
@@ -293,17 +418,17 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     const updatedTransactions = [...transactions];
 
-    // Create adjustment transaction if difference is non-zero and a fund is selected
     if (difference !== 0 && fundIdForAdjustment) {
-      adjAmount = difference; // if difference is -350, it means calculated is 99100 and actual is 98750, so we need to SUBTRACT 350, hence -350 adjustment
+      adjAmount = difference;
       const adjTx: Transaction = {
         id: generateUUID(),
         type: 'adjustment',
-        amount: adjAmount, // can be positive or negative
+        amount: adjAmount,
         date: today,
         notes: recNotes ? `Reconciliation: ${recNotes}` : 'Reconciliation Adjustment',
         fundId: fundIdForAdjustment,
-        adjustmentType: adjAmount < 0 ? 'Correction Entry' : 'Correction Entry',
+        adjustmentType: 'Correction Entry',
+        category: 'Other',
       };
       updatedTransactions.unshift(adjTx);
       setTransactions(updatedTransactions);
@@ -321,7 +446,7 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     const updatedReconciliations = [newRec, ...reconciliations];
     setReconciliations(updatedReconciliations);
-    saveData(funds, updatedTransactions, updatedReconciliations, reminders, currency, notes, theme, isFirstLaunch);
+    saveData(funds, updatedTransactions, updatedReconciliations, reminders, currency, notes, theme, recurringTransactions, isFirstLaunch);
   };
 
   // Reminders Actions
@@ -333,14 +458,13 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     };
     const updated = [...reminders, newRem];
     setReminders(updated);
-    saveData(funds, transactions, reconciliations, updated, currency, notes, theme, isFirstLaunch);
+    saveData(funds, transactions, reconciliations, updated, currency, notes, theme, recurringTransactions, isFirstLaunch);
   };
 
   const payReminder = (id: string) => {
     const reminder = reminders.find((r) => r.id === id);
     if (!reminder) return;
 
-    // Create Expense transaction
     const expenseTx: Transaction = {
       id: generateUUID(),
       type: 'expense',
@@ -348,48 +472,81 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
       date: new Date().toISOString().split('T')[0],
       notes: `Bill Paid: ${reminder.title}${reminder.notes ? ` (${reminder.notes})` : ''}`,
       fundId: reminder.fundId,
+      category: 'Utilities & Bills',
     };
 
     const updatedTransactions = [expenseTx, ...transactions];
-    const updatedReminders = reminders.filter((r) => r.id !== id); // We delete reminder on pay (or can set completed: true, we'll delete it to keep it clean)
-    
+    const updatedReminders = reminders.filter((r) => r.id !== id);
+
     setTransactions(updatedTransactions);
     setReminders(updatedReminders);
-    saveData(funds, updatedTransactions, reconciliations, updatedReminders, currency, notes, theme, isFirstLaunch);
+    saveData(funds, updatedTransactions, reconciliations, updatedReminders, currency, notes, theme, recurringTransactions, isFirstLaunch);
   };
 
   const deleteReminder = (id: string) => {
     const updated = reminders.filter((r) => r.id !== id);
     setReminders(updated);
-    saveData(funds, transactions, reconciliations, updated, currency, notes, theme, isFirstLaunch);
+    saveData(funds, transactions, reconciliations, updated, currency, notes, theme, recurringTransactions, isFirstLaunch);
+  };
+
+  // Recurring Transactions Actions
+  const addRecurringTransaction = (rec: Omit<RecurringTransaction, 'id' | 'nextDate' | 'active'>) => {
+    const newRec: RecurringTransaction = {
+      ...rec,
+      id: generateUUID(),
+      nextDate: rec.startDate,
+      active: true,
+    };
+    const updated = [...recurringTransactions, newRec];
+    setRecurringTransactions(updated);
+    saveData(funds, transactions, reconciliations, reminders, currency, notes, theme, updated, isFirstLaunch);
+  };
+
+  const deleteRecurringTransaction = (id: string) => {
+    const updated = recurringTransactions.filter((r) => r.id !== id);
+    setRecurringTransactions(updated);
+    saveData(funds, transactions, reconciliations, reminders, currency, notes, theme, updated, isFirstLaunch);
+  };
+
+  const toggleRecurringTransaction = (id: string) => {
+    const updated = recurringTransactions.map((r) =>
+      r.id === id ? { ...r, active: !r.active } : r
+    );
+    setRecurringTransactions(updated);
+    saveData(funds, transactions, reconciliations, reminders, currency, notes, theme, updated, isFirstLaunch);
   };
 
   // Miscellaneous Actions
   const updateNotes = (newNotes: string) => {
     setNotes(newNotes);
-    saveData(funds, transactions, reconciliations, reminders, currency, newNotes, theme, isFirstLaunch);
+    saveData(funds, transactions, reconciliations, reminders, currency, newNotes, theme, recurringTransactions, isFirstLaunch);
   };
 
   const updateCurrency = (newCurrency: string) => {
     setCurrency(newCurrency);
-    saveData(funds, transactions, reconciliations, reminders, newCurrency, notes, theme, isFirstLaunch);
+    saveData(funds, transactions, reconciliations, reminders, newCurrency, notes, theme, recurringTransactions, isFirstLaunch);
   };
 
   const updateTheme = (newTheme: 'light' | 'dark' | 'system') => {
     setTheme(newTheme);
-    saveData(funds, transactions, reconciliations, reminders, currency, notes, newTheme, isFirstLaunch);
+    saveData(funds, transactions, reconciliations, reminders, currency, notes, newTheme, recurringTransactions, isFirstLaunch);
   };
 
-  const resetData = () => {
+  const resetData = async () => {
     setFunds([]);
     setTransactions([]);
     setReconciliations([]);
     setReminders([]);
+    setRecurringTransactions([]);
     setCurrency('₹');
     setNotes('');
     setTheme('system');
     setIsFirstLaunch(true);
-    localStorage.removeItem(LOCAL_STORAGE_KEY);
+    try {
+      await setValue('finance_data', null);
+    } catch (e) {
+      console.error('Failed to clear IndexedDB:', e);
+    }
   };
 
   const exportData = (): string => {
@@ -402,6 +559,7 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
       notes,
       currency,
       theme,
+      recurringTransactions,
     };
     return JSON.stringify(data, null, 2);
   };
@@ -409,12 +567,11 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const importData = (jsonString: string): { success: boolean; error?: string } => {
     try {
       const parsed = JSON.parse(jsonString);
-      
-      // Basic validation
+
       if (!parsed || typeof parsed !== 'object') {
         return { success: false, error: 'Invalid file format. Must be a JSON object.' };
       }
-      
+
       if (parsed.version !== DATA_VERSION) {
         return { success: false, error: `Unsupported data version: ${parsed.version}. Expected version: ${DATA_VERSION}.` };
       }
@@ -423,18 +580,18 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
         return { success: false, error: 'Missing critical fields: funds or transactions.' };
       }
 
-      // Valid structure, update state
       setFunds(parsed.funds);
       setTransactions(parsed.transactions);
       setReconciliations(parsed.reconciliations || []);
       setReminders(parsed.reminders || []);
+      setRecurringTransactions(parsed.recurringTransactions || []);
       setCurrency(parsed.currency || '₹');
       setNotes(parsed.notes || '');
       setTheme(parsed.theme || 'system');
       setIsFirstLaunch(false);
 
-      // Save directly to localStorage
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(parsed));
+      // Save directly to IndexedDB
+      setValue('finance_data', parsed);
       return { success: true };
     } catch (e) {
       return { success: false, error: 'Failed to parse JSON file. Ensure it is valid JSON.' };
@@ -449,7 +606,6 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     } else if (theme === 'light') {
       root.classList.remove('dark');
     } else {
-      // System mode
       const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
       const handleChange = () => {
         if (mediaQuery.matches) {
@@ -458,8 +614,8 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
           root.classList.remove('dark');
         }
       };
-      
-      handleChange(); // initial execution
+
+      handleChange();
       mediaQuery.addEventListener('change', handleChange);
       return () => mediaQuery.removeEventListener('change', handleChange);
     }
@@ -472,10 +628,12 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
         transactions,
         reconciliations,
         reminders,
+        recurringTransactions,
         currency,
         notes,
         theme,
         isFirstLaunch,
+        isLoading,
         fundBalances,
         currentAccountBalance,
         setupApp,
@@ -491,6 +649,9 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
         addReminder,
         payReminder,
         deleteReminder,
+        addRecurringTransaction,
+        deleteRecurringTransaction,
+        toggleRecurringTransaction,
         updateNotes,
         updateCurrency,
         updateTheme,

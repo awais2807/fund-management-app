@@ -6,6 +6,7 @@ export interface BaseTransaction {
   amount: number;
   date: string;
   notes: string;
+  category?: string; // e.g. 'Food & Dining', 'Utilities & Bills', etc.
 }
 
 export interface CreditTransaction extends BaseTransaction {
@@ -40,6 +41,7 @@ export interface Fund {
   order: number;
   archived: boolean;
   createdAt: string;
+  budget?: number; // optional monthly spending limit
 }
 
 export interface ReconciliationRecord {
@@ -62,6 +64,20 @@ export interface Reminder {
   completed: boolean;
 }
 
+export interface RecurringTransaction {
+  id: string;
+  title: string;
+  amount: number;
+  type: 'credit' | 'expense';
+  fundId: string;
+  category: string;
+  frequency: 'daily' | 'weekly' | 'monthly' | 'yearly';
+  startDate: string;
+  nextDate: string;
+  active: boolean;
+  notes?: string;
+}
+
 export interface ExportData {
   version: number;
   funds: Fund[];
@@ -71,4 +87,5 @@ export interface ExportData {
   notes: string;
   currency: string;
   theme: 'light' | 'dark' | 'system';
+  recurringTransactions?: RecurringTransaction[];
 }

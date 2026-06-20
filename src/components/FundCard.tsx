@@ -34,6 +34,23 @@ export const FundCard: React.FC<FundCardProps> = ({
       .reduce((sum, t) => sum + t.amount, 0);
   }, [transactions, fund.id]);
 
+  const currentMonthExpenses = React.useMemo(() => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth();
+    return transactions
+      .filter((t) => {
+        if ((t as any).fundId !== fund.id) return false;
+        const tDate = new Date(t.date);
+        return (
+          tDate.getFullYear() === year &&
+          tDate.getMonth() === month &&
+          (t.type === 'expense' || (t.type === 'adjustment' && t.amount < 0))
+        );
+      })
+      .reduce((sum, t) => sum + Math.abs(t.amount), 0);
+  }, [transactions, fund.id]);
+
   // Calculate percentage of total account balance
   const allocationPercentage = React.useMemo(() => {
     if (totalAccountBalance <= 0) return 0;
@@ -99,7 +116,11 @@ export const FundCard: React.FC<FundCardProps> = ({
       </div>
 
       {/* Allocation Progress Bar */}
-      <div className="mb-5">
+      <div className="mb-5 flex flex-col gap-1">
+        <div className="flex justify-between items-center text-[9px] font-semibold text-neutral-400 dark:text-neutral-500">
+          <span>Allocation of Treasury</span>
+          <span>{allocationPercentage}%</span>
+        </div>
         <div className="w-full bg-neutral-100 dark:bg-neutral-800 h-1.5 rounded-full overflow-hidden">
           <div
             className="h-full rounded-full transition-all duration-500"
@@ -107,6 +128,30 @@ export const FundCard: React.FC<FundCardProps> = ({
           />
         </div>
       </div>
+
+      {/* Budget Progress Bar (If configured) */}
+      {fund.budget && fund.budget > 0 ? (
+        <div className="mb-5 flex flex-col gap-1">
+          <div className="flex justify-between items-center text-[9px] font-semibold">
+            <span className="text-neutral-400 dark:text-neutral-500">Monthly Budget Spent</span>
+            <span className={currentMonthExpenses > fund.budget ? 'text-rose-500 font-bold' : 'text-neutral-500 dark:text-neutral-400'}>
+              {formatCurrency(currentMonthExpenses, currency)} / {formatCurrency(fund.budget, currency)}
+            </span>
+          </div>
+          <div className="w-full bg-neutral-100 dark:bg-neutral-800 h-1.5 rounded-full overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all duration-500 ${
+                currentMonthExpenses >= fund.budget
+                  ? 'bg-rose-500'
+                  : currentMonthExpenses >= fund.budget * 0.75
+                  ? 'bg-amber-500'
+                  : 'bg-emerald-500'
+              }`}
+              style={{ width: `${Math.min(100, (currentMonthExpenses / fund.budget) * 100)}%` }}
+            />
+          </div>
+        </div>
+      ) : null}
 
       {/* Actions */}
       <div className="grid grid-cols-3 gap-2 mt-auto shrink-0">

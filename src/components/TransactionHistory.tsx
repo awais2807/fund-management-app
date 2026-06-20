@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { useFinance } from '../context/FinanceContext';
+import { useFinance, CATEGORIES } from '../context/FinanceContext';
 import type { Transaction } from '../types';
 import { formatCurrency } from '../utils/helpers';
 import { Card, Button, Input, Select } from './ui/Common';
@@ -29,6 +29,7 @@ export const TransactionHistory: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFund, setSelectedFund] = useState('all');
   const [selectedType, setSelectedType] = useState('all');
+  const [selectedCategory, setSelectedCategory] = useState('all');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
 
@@ -44,6 +45,7 @@ export const TransactionHistory: React.FC = () => {
   const [editFundId, setEditFundId] = useState('');
   const [editToFundId, setEditToFundId] = useState('');
   const [editAdjustmentType, setEditAdjustmentType] = useState('Correction Entry');
+  const [editCategory, setEditCategory] = useState('Other');
 
   const activeFunds = useMemo(() => funds.filter((f) => !f.archived), [funds]);
 
@@ -56,6 +58,7 @@ export const TransactionHistory: React.FC = () => {
     setEditFundId((tx as any).fundId || '');
     setEditToFundId((tx as any).toFundId || '');
     setEditAdjustmentType((tx as any).adjustmentType || 'Correction Entry');
+    setEditCategory(tx.category || 'Other');
   };
 
   const handleEditSubmit = (e: React.FormEvent) => {
@@ -78,12 +81,14 @@ export const TransactionHistory: React.FC = () => {
 
     if (editingTx.type === 'credit' || editingTx.type === 'expense') {
       updatedTx.fundId = editFundId;
+      updatedTx.category = editCategory;
     } else if (editingTx.type === 'transfer') {
       updatedTx.fundId = editFundId;
       updatedTx.toFundId = editToFundId;
     } else if (editingTx.type === 'adjustment') {
       updatedTx.fundId = editFundId;
       updatedTx.adjustmentType = editAdjustmentType;
+      updatedTx.category = editCategory;
     }
 
     editTransaction(editingTx.id, updatedTx);
@@ -101,6 +106,7 @@ export const TransactionHistory: React.FC = () => {
     setSearchQuery('');
     setSelectedFund('all');
     setSelectedType('all');
+    setSelectedCategory('all');
     setStartDate('');
     setEndDate('');
   };
@@ -137,6 +143,9 @@ export const TransactionHistory: React.FC = () => {
         // 3. Type Filter
         const matchType = selectedType === 'all' || t.type === selectedType;
 
+        // 3b. Category Filter
+        const matchCategory = selectedCategory === 'all' || t.category === selectedCategory;
+
         // 4. Date range filter
         let matchDate = true;
         if (startDate) {
@@ -146,7 +155,7 @@ export const TransactionHistory: React.FC = () => {
           matchDate = matchDate && t.date <= endDate;
         }
 
-        return matchQuery && matchFund && matchType && matchDate;
+        return matchQuery && matchFund && matchType && matchCategory && matchDate;
       })
       .sort((a, b) => {
         // Sorting logic
@@ -159,7 +168,7 @@ export const TransactionHistory: React.FC = () => {
 
         return sortOrder === 'asc' ? compare : -compare;
       });
-  }, [transactions, searchQuery, selectedFund, selectedType, startDate, endDate, sortBy, sortOrder]);
+  }, [transactions, searchQuery, selectedFund, selectedType, selectedCategory, startDate, endDate, sortBy, sortOrder]);
 
   // Helper to get Fund name
   const getFundName = (fundId: string) => {
@@ -218,7 +227,7 @@ export const TransactionHistory: React.FC = () => {
           <h2 className="text-sm font-semibold text-neutral-800 dark:text-neutral-200">Search and Filter</h2>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
           {/* Note Search */}
           <div className="md:col-span-2 relative">
             <Input
@@ -260,6 +269,17 @@ export const TransactionHistory: React.FC = () => {
             ]}
             value={selectedType}
             onChange={(e) => setSelectedType(e.target.value)}
+          />
+
+          {/* Category Filter */}
+          <Select
+            label="Filter by Category"
+            options={[
+              { value: 'all', label: 'All Categories' },
+              ...CATEGORIES.map((cat) => ({ value: cat, label: cat })),
+            ]}
+            value={selectedCategory}
+            onChange={(e) => setSelectedCategory(e.target.value)}
           />
 
           {/* Date range filters */}
@@ -319,6 +339,7 @@ export const TransactionHistory: React.FC = () => {
                     {sortBy === 'amount' && <ArrowUpDown className="h-3.5 w-3.5 text-neutral-600" />}
                   </div>
                 </th>
+                <th className="px-6 py-4">Category</th>
                 <th className="px-6 py-4">Notes / Remarks</th>
                 <th className="px-6 py-4 text-right">Actions</th>
               </tr>
@@ -374,6 +395,11 @@ export const TransactionHistory: React.FC = () => {
                       >
                         {isTransfer ? '' : isPositive ? '+' : '-'}
                         {formatCurrency(Math.abs(tx.amount), currency)}
+                      </td>
+
+                      {/* Category */}
+                      <td className="px-6 py-4 text-neutral-500 dark:text-neutral-400 whitespace-nowrap">
+                        {tx.category || '-'}
                       </td>
 
                       {/* Notes */}
@@ -465,8 +491,9 @@ export const TransactionHistory: React.FC = () => {
 
                   {/* Row 3: Remarks and Actions */}
                   <div className="flex justify-between items-center gap-4 border-t border-neutral-100/50 dark:border-neutral-850/30 pt-2">
-                    <div className="text-xs text-neutral-400 dark:text-neutral-450 truncate max-w-[70%]">
-                      {tx.notes || 'No notes'}
+                    <div className="flex flex-col gap-0.5 text-[11px] text-neutral-400 dark:text-neutral-450 truncate max-w-[70%]">
+                      <span>Category: <strong className="text-neutral-650 dark:text-neutral-300 font-semibold">{tx.category || '-'}</strong></span>
+                      <span className="truncate">{tx.notes || 'No notes'}</span>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       <button
@@ -567,6 +594,19 @@ export const TransactionHistory: React.FC = () => {
                 ]}
                 value={editAdjustmentType}
                 onChange={(e) => setEditAdjustmentType(e.target.value)}
+                required
+              />
+            )}
+
+            {/* Category selection */}
+            {(editingTx.type === 'credit' ||
+              editingTx.type === 'expense' ||
+              editingTx.type === 'adjustment') && (
+              <Select
+                label="Category"
+                options={CATEGORIES.map((cat) => ({ value: cat, label: cat }))}
+                value={editCategory}
+                onChange={(e) => setEditCategory(e.target.value)}
                 required
               />
             )}
