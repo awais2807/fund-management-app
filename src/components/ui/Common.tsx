@@ -62,7 +62,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
         {label && <label className="text-xs font-semibold text-neutral-500 dark:text-neutral-400">{label}</label>}
         <input
           ref={ref}
-          className={`w-full rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-900/50 px-3.5 py-2.5 text-sm text-neutral-800 dark:text-neutral-100 placeholder-neutral-400 focus:border-neutral-400 dark:focus:border-neutral-600 focus:bg-white dark:focus:bg-neutral-900 focus:outline-none transition-all duration-200 ${
+          className={`w-full rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-900/50 px-3.5 py-2.5 text-[16px] md:text-sm text-neutral-800 dark:text-neutral-100 placeholder-neutral-400 focus:border-neutral-400 dark:focus:border-neutral-600 focus:bg-white dark:focus:bg-neutral-900 focus:outline-none transition-all duration-200 ${
             error ? 'border-rose-500 focus:border-rose-500' : ''
           } ${className}`}
           {...props}
@@ -87,7 +87,7 @@ export const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
         {label && <label className="text-xs font-semibold text-neutral-500 dark:text-neutral-400">{label}</label>}
         <select
           ref={ref}
-          className={`w-full rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-900/50 px-3.5 py-2.5 text-sm text-neutral-800 dark:text-neutral-100 focus:border-neutral-400 dark:focus:border-neutral-600 focus:bg-white dark:focus:bg-neutral-900 focus:outline-none transition-all duration-200 cursor-pointer ${
+          className={`w-full rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-900/50 px-3.5 py-2.5 text-[16px] md:text-sm text-neutral-800 dark:text-neutral-100 focus:border-neutral-400 dark:focus:border-neutral-600 focus:bg-white dark:focus:bg-neutral-900 focus:outline-none transition-all duration-200 cursor-pointer ${
             error ? 'border-rose-500 focus:border-rose-500' : ''
           } ${className}`}
           {...props}

@@ -54,3 +54,8 @@ input[type=number] {
 .pastel-pill-shadow {
   box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05);
 }
+
+/* Hide bottom navigation bar on mobile when modal dialog is open */
+body[style*="overflow: hidden"] nav.md\:hidden {
+  display: none !important;
+}
