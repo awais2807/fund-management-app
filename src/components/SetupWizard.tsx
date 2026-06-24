@@ -49,7 +49,7 @@ export const SetupWizard: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen w-full flex items-center justify-center bg-neutral-50 dark:bg-neutral-950 p-4 transition-colors duration-250">
+    <div className="h-full w-full overflow-y-auto flex items-center justify-center bg-neutral-50 dark:bg-neutral-950 p-4 transition-colors duration-250">
       <div className="w-full max-w-lg animate-enter">
         <div className="flex flex-col items-center mb-6 text-center">
           <div className="h-14 w-14 rounded-2xl bg-neutral-900 dark:bg-neutral-100 flex items-center justify-center text-white dark:text-neutral-950 mb-3 shadow-lg">
