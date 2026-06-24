@@ -48,7 +48,7 @@ function AppContent() {
       {/* Floating Action Button (FAB) */}
       <button
         onClick={() => handleOpenTxModal()}
-        className="fixed bottom-20 right-6 md:bottom-8 md:right-8 z-40 h-14 w-14 rounded-full bg-neutral-900 text-white dark:bg-neutral-50 dark:text-neutral-950 flex items-center justify-center shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 transition-all duration-200 cursor-pointer focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-neutral-950 dark:focus:ring-neutral-100"
+        className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] md:bottom-8 right-6 md:right-8 z-40 h-14 w-14 rounded-full bg-neutral-900 text-white dark:bg-neutral-50 dark:text-neutral-950 flex items-center justify-center shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 transition-all duration-200 cursor-pointer focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-neutral-950 dark:focus:ring-neutral-100"
         title="Record Quick Transaction"
       >
         <Plus className="h-6 w-6" />

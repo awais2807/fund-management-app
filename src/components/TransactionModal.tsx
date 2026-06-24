@@ -172,7 +172,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
     <Dialog isOpen={isOpen} onClose={onClose} title="Add New Transaction">
       <div className="flex flex-col gap-4">
         {/* Tab Headers */}
-        <div className="grid grid-cols-4 bg-neutral-100 dark:bg-neutral-850 p-1 rounded-xl border border-neutral-150/40 dark:border-neutral-800 shrink-0">
+        <div className="grid grid-cols-4 bg-neutral-100 dark:bg-neutral-950 p-1 rounded-xl border border-neutral-150/40 dark:border-neutral-800 shrink-0">
           {tabs.map((tab) => {
             const Icon = tab.icon;
             const isSelected = activeTab === tab.id;
@@ -183,8 +183,8 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                 onClick={() => setActiveTab(tab.id)}
                 className={`py-1.5 flex flex-col sm:flex-row items-center justify-center gap-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                   isSelected
-                    ? 'bg-white text-neutral-950 shadow-xs dark:bg-neutral-900 dark:text-white'
-                    : 'text-neutral-450 hover:text-neutral-700 dark:hover:text-neutral-300'
+                    ? 'bg-white text-neutral-950 shadow-xs dark:bg-neutral-850 dark:text-white'
+                    : 'text-neutral-500 hover:text-neutral-700 dark:text-neutral-450 dark:hover:text-neutral-200'
                 }`}
               >
                 <Icon className={`h-4 w-4 ${tab.color}`} />

@@ -20,7 +20,7 @@ export const Layout: React.FC<LayoutProps> = ({ activeTab, setActiveTab, childre
   ] as const;
 
   return (
-    <div className="min-h-screen bg-neutral-50 dark:bg-neutral-955 text-neutral-800 dark:text-neutral-250 flex flex-col transition-colors duration-200 font-sans pb-[calc(4rem+env(safe-area-inset-bottom))] md:pb-0">
+    <div className="min-h-screen bg-neutral-50 dark:bg-neutral-950 text-neutral-800 dark:text-neutral-250 flex flex-col transition-colors duration-200 font-sans pb-[calc(4rem+env(safe-area-inset-bottom))] md:pb-0">
       {/* Header */}
       <header className="sticky top-0 z-40 bg-white/85 dark:bg-neutral-900/85 backdrop-blur-md border-b border-neutral-100 dark:border-neutral-850 transition-colors duration-200">
         <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
