@@ -81,14 +81,6 @@ export const TransactionHistory: React.FC = () => {
   };
 
   const handlePrintPDF = () => {
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) {
-      alert('Please allow popups to generate print statements.');
-      return;
-    }
-
-    const todayStr = new Date().toLocaleDateString();
-    
     // Calculate statement totals
     let totalCredits = 0;
     let totalExpenses = 0;
@@ -101,191 +93,202 @@ export const TransactionHistory: React.FC = () => {
       }
     });
 
-    // Render print HTML
-    const htmlContent = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Financial Statement - ${todayStr}</title>
-        <style>
-          body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            color: #171717;
-            padding: 40px;
-            font-size: 13px;
-            line-height: 1.5;
-          }
-          .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-bottom: 2px solid #e5e5e5;
-            padding-bottom: 20px;
-            margin-bottom: 30px;
-          }
-          .title {
-            font-size: 20px;
-            font-weight: 700;
-            margin: 0;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-          }
-          .subtitle {
-            font-size: 11px;
-            color: #737373;
-            margin-top: 5px;
-          }
-          .summary-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 20px;
-            margin-bottom: 35px;
-          }
-          .summary-card {
-            border: 1px solid #e5e5e5;
-            border-radius: 8px;
-            padding: 15px;
-            background-color: #fafafa;
-          }
-          .summary-card-title {
-            font-size: 9px;
-            text-transform: uppercase;
-            font-weight: bold;
-            color: #737373;
-            letter-spacing: 0.5px;
-          }
-          .summary-card-value {
-            font-size: 18px;
-            font-weight: 700;
-            margin-top: 5px;
-          }
-          .credits { color: #16a34a; }
-          .expenses { color: #dc2626; }
-          table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 15px;
-          }
-          th {
-            border-bottom: 2px solid #171717;
-            text-align: left;
-            padding: 8px 12px;
-            font-size: 10px;
-            text-transform: uppercase;
-            font-weight: bold;
-            color: #171717;
-          }
-          td {
-            border-bottom: 1px solid #e5e5e5;
-            padding: 10px 12px;
-            vertical-align: top;
-          }
-          .amount {
-            font-weight: 600;
-            text-align: right;
-          }
-          th.amount-header {
-            text-align: right;
-          }
-          .badge {
-            font-size: 9px;
-            font-weight: bold;
-            padding: 2px 6px;
-            border-radius: 4px;
-            text-transform: uppercase;
-            border: 1px solid #e5e5e5;
-            display: inline-block;
-          }
-          .notes {
-            color: #525252;
-            font-size: 12px;
-          }
-          @media print {
-            body { padding: 0; }
-            button { display: none; }
-          }
-        </style>
-      </head>
-      <body>
-        <div class="header">
-          <div>
-            <h1 class="title">Personal Treasury Statement</h1>
-            <div class="subtitle">Generated on ${todayStr} • Filtered Audit Record</div>
-          </div>
-          <div style="text-align: right;">
-            <div style="font-weight: bold; font-size: 14px;">Personal Finance</div>
-            <div class="subtitle">Secure Offline Ledger</div>
+    const todayStr = new Date().toLocaleDateString();
+
+    // Create printing container div
+    const printContainer = document.createElement('div');
+    printContainer.id = 'print-statement-section';
+    
+    // Render print markup inside container
+    printContainer.innerHTML = `
+      <div class="print-header">
+        <div>
+          <h1 class="print-title">Personal Treasury Statement</h1>
+          <div class="print-subtitle">Generated on ${todayStr} • Filtered Audit Record</div>
+        </div>
+        <div style="text-align: right;">
+          <div style="font-weight: bold; font-size: 14px; color: #171717;">Personal Finance</div>
+          <div class="print-subtitle">Secure Offline Ledger</div>
+        </div>
+      </div>
+
+      <div class="print-summary-grid">
+        <div class="print-summary-card">
+          <div class="print-summary-card-title">Total Credits</div>
+          <div class="print-summary-card-value print-credits">+${currency}${totalCredits.toFixed(2)}</div>
+        </div>
+        <div class="print-summary-card">
+          <div class="print-summary-card-title">Total Expenses</div>
+          <div class="print-summary-card-value print-expenses">-${currency}${totalExpenses.toFixed(2)}</div>
+        </div>
+        <div class="print-summary-card">
+          <div class="print-summary-card-title">Net Cash Flow</div>
+          <div class="print-summary-card-value ${(totalCredits - totalExpenses) >= 0 ? 'print-credits' : 'print-expenses'}">
+            ${(totalCredits - totalExpenses) >= 0 ? '+' : '-'}${currency}${Math.abs(totalCredits - totalExpenses).toFixed(2)}
           </div>
         </div>
+      </div>
 
-        <div class="summary-grid">
-          <div class="summary-card">
-            <div class="summary-card-title">Total Credits</div>
-            <div class="summary-card-value credits">+${currency}${totalCredits.toFixed(2)}</div>
-          </div>
-          <div class="summary-card">
-            <div class="summary-card-title">Total Expenses</div>
-            <div class="summary-card-value expenses">-${currency}${totalExpenses.toFixed(2)}</div>
-          </div>
-          <div class="summary-card">
-            <div class="summary-card-title">Net Cash Flow</div>
-            <div class="summary-card-value ${(totalCredits - totalExpenses) >= 0 ? 'credits' : 'expenses'}">
-              ${(totalCredits - totalExpenses) >= 0 ? '+' : '-'}${currency}${Math.abs(totalCredits - totalExpenses).toFixed(2)}
-            </div>
-          </div>
-        </div>
-
-        <h3>Transaction Audit Log (${processedTransactions.length} records)</h3>
-        <table>
-          <thead>
-            <tr>
-              <th style="width: 12%;">Date</th>
-              <th style="width: 10%;">Type</th>
-              <th style="width: 15%;">Fund</th>
-              <th style="width: 15%;">Category</th>
-              <th style="width: 35%;">Notes / Details</th>
-              <th style="width: 13%;" class="amount-header">Amount</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${processedTransactions.map(t => {
-              const fundName = (t as any).fundId ? getFundName((t as any).fundId) : '';
-              const toFundName = (t as any).toFundId ? ` → ${getFundName((t as any).toFundId)}` : '';
-              const typeColor = t.type === 'credit' ? '#16a34a' : t.type === 'expense' ? '#dc2626' : '#2563eb';
-              
-              return `
-                <tr>
-                  <td style="font-family: monospace;">${t.date}</td>
-                  <td>
-                    <span class="badge" style="color: ${typeColor}; border-color: ${typeColor}20; background-color: ${typeColor}05">
-                      ${t.type}
-                    </span>
-                  </td>
-                  <td style="font-weight: 500;">${fundName}${toFundName}</td>
-                  <td><span class="badge">${t.category || 'Other'}</span></td>
-                  <td class="notes">${t.notes}</td>
-                  <td class="amount ${t.type === 'credit' ? 'credits' : t.type === 'expense' ? 'expenses' : ''}">
-                    ${t.type === 'credit' ? '+' : t.type === 'expense' ? '-' : ''}${currency}${t.amount.toFixed(2)}
-                  </td>
-                </tr>
-              `;
-            }).join('')}
-          </tbody>
-        </table>
-
-        <script>
-          window.onload = function() {
-            setTimeout(function() {
-              window.print();
-            }, 250);
-          }
-        </script>
-      </body>
-      </html>
+      <h3 style="margin-top: 25px; margin-bottom: 10px; font-size: 14px; font-weight: 600; color: #171717;">
+        Transaction Audit Log (${processedTransactions.length} records)
+      </h3>
+      <table class="print-table">
+        <thead>
+          <tr>
+            <th style="width: 12%;">Date</th>
+            <th style="width: 12%;">Type</th>
+            <th style="width: 18%;">Fund</th>
+            <th style="width: 18%;">Category</th>
+            <th style="width: 28%;">Notes / Details</th>
+            <th style="width: 12%; text-align: right;">Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${processedTransactions.map(t => {
+            const fundName = (t as any).fundId ? getFundName((t as any).fundId) : '';
+            const toFundName = (t as any).toFundId ? ` → ${getFundName((t as any).toFundId)}` : '';
+            const typeColor = t.type === 'credit' ? '#16a34a' : t.type === 'expense' ? '#dc2626' : '#2563eb';
+            
+            return `
+              <tr>
+                <td style="font-family: monospace; font-size: 11px;">${t.date}</td>
+                <td>
+                  <span class="print-badge" style="color: ${typeColor}; border-color: ${typeColor}30;">
+                    ${t.type}
+                  </span>
+                </td>
+                <td style="font-weight: 500;">${fundName}${toFundName}</td>
+                <td><span class="print-badge" style="color: #525252; border-color: #e5e5e5;">${t.category || 'Other'}</span></td>
+                <td style="color: #404040; font-size: 11px;">${t.notes || '-'}</td>
+                <td class="print-amount ${t.type === 'credit' ? 'print-credits' : t.type === 'expense' ? 'print-expenses' : ''}" style="text-align: right; font-weight: 600;">
+                  ${t.type === 'credit' ? '+' : t.type === 'expense' ? '-' : ''}${currency}${t.amount.toFixed(2)}
+                </td>
+              </tr>
+            `;
+          }).join('')}
+        </tbody>
+      </table>
     `;
 
-    printWindow.document.write(htmlContent);
-    printWindow.document.close();
+    // Create print styles to hide #root and style the printing area
+    const printStyle = document.createElement('style');
+    printStyle.id = 'print-statement-styles';
+    printStyle.innerHTML = `
+      #print-statement-section {
+        display: none;
+      }
+      @media print {
+        #root {
+          display: none !important;
+        }
+        #print-statement-section {
+          display: block !important;
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+          color: #171717;
+          font-size: 12px;
+          line-height: 1.5;
+          padding: 0;
+          margin: 0;
+        }
+        .print-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          border-bottom: 2px solid #e5e5e5;
+          padding-bottom: 15px;
+          margin-bottom: 25px;
+        }
+        .print-title {
+          font-size: 18px;
+          font-weight: 700;
+          margin: 0;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+        }
+        .print-subtitle {
+          font-size: 10px;
+          color: #737373;
+          margin-top: 4px;
+        }
+        .print-summary-grid {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 15px;
+          margin-bottom: 25px;
+        }
+        .print-summary-card {
+          border: 1px solid #e5e5e5;
+          border-radius: 8px;
+          padding: 12px;
+          background-color: #fafafa;
+        }
+        .print-summary-card-title {
+          font-size: 8px;
+          text-transform: uppercase;
+          font-weight: bold;
+          color: #737373;
+          letter-spacing: 0.5px;
+        }
+        .print-summary-card-value {
+          font-size: 16px;
+          font-weight: 700;
+          margin-top: 4px;
+        }
+        .print-credits { color: #16a34a !important; }
+        .print-expenses { color: #dc2626 !important; }
+        
+        .print-table {
+          width: 100%;
+          border-collapse: collapse;
+          margin-top: 10px;
+        }
+        .print-table th {
+          border-bottom: 2px solid #171717;
+          text-align: left;
+          padding: 6px 8px;
+          font-size: 9px;
+          text-transform: uppercase;
+          font-weight: bold;
+          color: #171717;
+        }
+        .print-table td {
+          border-bottom: 1px solid #e5e5e5;
+          padding: 8px;
+          vertical-align: top;
+        }
+        .print-badge {
+          font-size: 8px;
+          font-weight: bold;
+          padding: 1px 4px;
+          border-radius: 4px;
+          text-transform: uppercase;
+          border: 1px solid currentColor;
+          display: inline-block;
+        }
+      }
+    `;
+
+    // Append print layout and styles to body
+    document.body.appendChild(printContainer);
+    document.head.appendChild(printStyle);
+
+    // Define cleanup function
+    const cleanup = () => {
+      const el = document.getElementById('print-statement-section');
+      const styleEl = document.getElementById('print-statement-styles');
+      if (el) el.remove();
+      if (styleEl) styleEl.remove();
+      window.removeEventListener('afterprint', cleanup);
+    };
+
+    // Listen for dialog dismissal (print or cancel) to run cleanup
+    window.addEventListener('afterprint', cleanup);
+
+    // Trigger printing
+    window.print();
+    
+    // Fallback cleanup after 2 seconds
+    setTimeout(cleanup, 2000);
   };
 
   // Handle Edit click
