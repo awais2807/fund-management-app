@@ -6,9 +6,10 @@ interface DialogProps {
   onClose: () => void;
   title: string;
   children: React.ReactNode;
+  size?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | '4xl' | 'max';
 }
 
-export const Dialog: React.FC<DialogProps> = ({ isOpen, onClose, title, children }) => {
+export const Dialog: React.FC<DialogProps> = ({ isOpen, onClose, title, children, size }) => {
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
@@ -34,7 +35,16 @@ export const Dialog: React.FC<DialogProps> = ({ isOpen, onClose, title, children
       />
       
       {/* Content Container */}
-      <div className="relative z-10 w-full max-w-lg transform rounded-2xl bg-white p-6 shadow-2xl dark:bg-neutral-900 border border-neutral-100 dark:border-neutral-800 animate-enter max-h-[90vh] flex flex-col">
+      <div className={`relative z-10 w-full ${
+        size === 'sm' ? 'max-w-sm' :
+        size === 'md' ? 'max-w-md' :
+        size === 'lg' ? 'max-w-lg' :
+        size === 'xl' ? 'max-w-xl' :
+        size === '2xl' ? 'max-w-2xl' :
+        size === '3xl' ? 'max-w-3xl' :
+        size === '4xl' ? 'max-w-4xl' :
+        size === 'max' ? 'max-w-6xl' : 'max-w-lg'
+      } transform rounded-2xl bg-white p-6 shadow-2xl dark:bg-neutral-900 border border-neutral-100 dark:border-neutral-800 animate-enter max-h-[90vh] flex flex-col`}>
         {/* Header */}
         <div className="flex items-center justify-between pb-3 border-b border-neutral-100 dark:border-neutral-800 shrink-0">
           <h3 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">{title}</h3>

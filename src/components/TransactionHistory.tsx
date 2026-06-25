@@ -49,6 +49,10 @@ export const TransactionHistory: React.FC = () => {
   const [editAdjustmentType, setEditAdjustmentType] = useState('Correction Entry');
   const [editCategory, setEditCategory] = useState('Other');
 
+  // Print Preview Dialog State
+  const [isPrintPreviewOpen, setIsPrintPreviewOpen] = useState(false);
+  const [printErrorMsg, setPrintErrorMsg] = useState<string | null>(null);
+
   const activeFunds = useMemo(() => funds.filter((f) => !f.archived), [funds]);
 
   const handleExportCSV = () => {
@@ -81,214 +85,8 @@ export const TransactionHistory: React.FC = () => {
   };
 
   const handlePrintPDF = () => {
-    // Calculate statement totals
-    let totalCredits = 0;
-    let totalExpenses = 0;
-    processedTransactions.forEach(t => {
-      if (t.type === 'credit') totalCredits += t.amount;
-      else if (t.type === 'expense') totalExpenses += t.amount;
-      else if (t.type === 'adjustment') {
-        if (t.amount > 0) totalCredits += t.amount;
-        else totalExpenses += Math.abs(t.amount);
-      }
-    });
-
-    const todayStr = new Date().toLocaleDateString();
-
-    // Create printing container div
-    const printContainer = document.createElement('div');
-    printContainer.id = 'print-statement-section';
-    
-    // Render print markup inside container
-    printContainer.innerHTML = `
-      <div class="print-header">
-        <div>
-          <h1 class="print-title">Personal Treasury Statement</h1>
-          <div class="print-subtitle">Generated on ${todayStr} • Filtered Audit Record</div>
-        </div>
-        <div style="text-align: right;">
-          <div style="font-weight: bold; font-size: 14px; color: #171717;">Personal Finance</div>
-          <div class="print-subtitle">Secure Offline Ledger</div>
-        </div>
-      </div>
-
-      <div class="print-summary-grid">
-        <div class="print-summary-card">
-          <div class="print-summary-card-title">Total Credits</div>
-          <div class="print-summary-card-value print-credits">+${currency}${totalCredits.toFixed(2)}</div>
-        </div>
-        <div class="print-summary-card">
-          <div class="print-summary-card-title">Total Expenses</div>
-          <div class="print-summary-card-value print-expenses">-${currency}${totalExpenses.toFixed(2)}</div>
-        </div>
-        <div class="print-summary-card">
-          <div class="print-summary-card-title">Net Cash Flow</div>
-          <div class="print-summary-card-value ${(totalCredits - totalExpenses) >= 0 ? 'print-credits' : 'print-expenses'}">
-            ${(totalCredits - totalExpenses) >= 0 ? '+' : '-'}${currency}${Math.abs(totalCredits - totalExpenses).toFixed(2)}
-          </div>
-        </div>
-      </div>
-
-      <h3 style="margin-top: 25px; margin-bottom: 10px; font-size: 14px; font-weight: 600; color: #171717;">
-        Transaction Audit Log (${processedTransactions.length} records)
-      </h3>
-      <table class="print-table">
-        <thead>
-          <tr>
-            <th style="width: 12%;">Date</th>
-            <th style="width: 12%;">Type</th>
-            <th style="width: 18%;">Fund</th>
-            <th style="width: 18%;">Category</th>
-            <th style="width: 28%;">Notes / Details</th>
-            <th style="width: 12%; text-align: right;">Amount</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${processedTransactions.map(t => {
-            const fundName = (t as any).fundId ? getFundName((t as any).fundId) : '';
-            const toFundName = (t as any).toFundId ? ` → ${getFundName((t as any).toFundId)}` : '';
-            const typeColor = t.type === 'credit' ? '#16a34a' : t.type === 'expense' ? '#dc2626' : '#2563eb';
-            
-            return `
-              <tr>
-                <td style="font-family: monospace; font-size: 11px;">${t.date}</td>
-                <td>
-                  <span class="print-badge" style="color: ${typeColor}; border-color: ${typeColor}30;">
-                    ${t.type}
-                  </span>
-                </td>
-                <td style="font-weight: 500;">${fundName}${toFundName}</td>
-                <td><span class="print-badge" style="color: #525252; border-color: #e5e5e5;">${t.category || 'Other'}</span></td>
-                <td style="color: #404040; font-size: 11px;">${t.notes || '-'}</td>
-                <td class="print-amount ${t.type === 'credit' ? 'print-credits' : t.type === 'expense' ? 'print-expenses' : ''}" style="text-align: right; font-weight: 600;">
-                  ${t.type === 'credit' ? '+' : t.type === 'expense' ? '-' : ''}${currency}${t.amount.toFixed(2)}
-                </td>
-              </tr>
-            `;
-          }).join('')}
-        </tbody>
-      </table>
-    `;
-
-    // Create print styles to hide #root and style the printing area
-    const printStyle = document.createElement('style');
-    printStyle.id = 'print-statement-styles';
-    printStyle.innerHTML = `
-      #print-statement-section {
-        display: none;
-      }
-      @media print {
-        #root {
-          display: none !important;
-        }
-        #print-statement-section {
-          display: block !important;
-          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-          color: #171717;
-          font-size: 12px;
-          line-height: 1.5;
-          padding: 0;
-          margin: 0;
-        }
-        .print-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          border-bottom: 2px solid #e5e5e5;
-          padding-bottom: 15px;
-          margin-bottom: 25px;
-        }
-        .print-title {
-          font-size: 18px;
-          font-weight: 700;
-          margin: 0;
-          text-transform: uppercase;
-          letter-spacing: 0.5px;
-        }
-        .print-subtitle {
-          font-size: 10px;
-          color: #737373;
-          margin-top: 4px;
-        }
-        .print-summary-grid {
-          display: grid;
-          grid-template-columns: repeat(3, 1fr);
-          gap: 15px;
-          margin-bottom: 25px;
-        }
-        .print-summary-card {
-          border: 1px solid #e5e5e5;
-          border-radius: 8px;
-          padding: 12px;
-          background-color: #fafafa;
-        }
-        .print-summary-card-title {
-          font-size: 8px;
-          text-transform: uppercase;
-          font-weight: bold;
-          color: #737373;
-          letter-spacing: 0.5px;
-        }
-        .print-summary-card-value {
-          font-size: 16px;
-          font-weight: 700;
-          margin-top: 4px;
-        }
-        .print-credits { color: #16a34a !important; }
-        .print-expenses { color: #dc2626 !important; }
-        
-        .print-table {
-          width: 100%;
-          border-collapse: collapse;
-          margin-top: 10px;
-        }
-        .print-table th {
-          border-bottom: 2px solid #171717;
-          text-align: left;
-          padding: 6px 8px;
-          font-size: 9px;
-          text-transform: uppercase;
-          font-weight: bold;
-          color: #171717;
-        }
-        .print-table td {
-          border-bottom: 1px solid #e5e5e5;
-          padding: 8px;
-          vertical-align: top;
-        }
-        .print-badge {
-          font-size: 8px;
-          font-weight: bold;
-          padding: 1px 4px;
-          border-radius: 4px;
-          text-transform: uppercase;
-          border: 1px solid currentColor;
-          display: inline-block;
-        }
-      }
-    `;
-
-    // Append print layout and styles to body
-    document.body.appendChild(printContainer);
-    document.head.appendChild(printStyle);
-
-    // Define cleanup function
-    const cleanup = () => {
-      const el = document.getElementById('print-statement-section');
-      const styleEl = document.getElementById('print-statement-styles');
-      if (el) el.remove();
-      if (styleEl) styleEl.remove();
-      window.removeEventListener('afterprint', cleanup);
-    };
-
-    // Listen for dialog dismissal (print or cancel) to run cleanup
-    window.addEventListener('afterprint', cleanup);
-
-    // Trigger printing
-    window.print();
-    
-    // Fallback cleanup after 2 seconds
-    setTimeout(cleanup, 2000);
+    setPrintErrorMsg(null);
+    setIsPrintPreviewOpen(true);
   };
 
   // Handle Edit click
@@ -411,6 +209,24 @@ export const TransactionHistory: React.FC = () => {
         return sortOrder === 'asc' ? compare : -compare;
       });
   }, [transactions, searchQuery, selectedFund, selectedType, selectedCategory, startDate, endDate, sortBy, sortOrder]);
+
+  const printSummary = useMemo(() => {
+    let totalCredits = 0;
+    let totalExpenses = 0;
+    processedTransactions.forEach((t) => {
+      if (t.type === 'credit') totalCredits += t.amount;
+      else if (t.type === 'expense') totalExpenses += t.amount;
+      else if (t.type === 'adjustment') {
+        if (t.amount > 0) totalCredits += t.amount;
+        else totalExpenses += Math.abs(t.amount);
+      }
+    });
+    return {
+      totalCredits,
+      totalExpenses,
+      netFlow: totalCredits - totalExpenses,
+    };
+  }, [processedTransactions]);
 
   // Helper to get Fund name
   const getFundName = (fundId: string) => {
@@ -893,6 +709,151 @@ export const TransactionHistory: React.FC = () => {
               </Button>
             </div>
           </form>
+        </Dialog>
+      )}
+
+      {/* Statement Print Preview Modal */}
+      {isPrintPreviewOpen && (
+        <Dialog
+          isOpen={isPrintPreviewOpen}
+          onClose={() => {
+            setIsPrintPreviewOpen(false);
+            setPrintErrorMsg(null);
+          }}
+          title="Statement Print Preview"
+          size="4xl"
+        >
+          <div className="flex flex-col gap-4">
+            {/* Guide for iOS standalone PWA users */}
+            {typeof window !== 'undefined' && /iPhone|iPad|iPod/.test(window.navigator.userAgent) && (window.navigator as any).standalone && (
+              <div className="p-3.5 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 rounded-xl text-xs text-amber-800 dark:text-amber-400 flex flex-col gap-1.5 no-print">
+                <span className="font-bold flex items-center gap-1">⚠️ iOS App Lock/PWA Printing Notice</span>
+                <span>
+                  Safari standalone apps on iOS do not support system print menus. To print or save this statement as a PDF:
+                  <ul className="list-disc pl-4 mt-1 flex flex-col gap-1">
+                    <li>Use the <strong>Export CSV</strong> option instead to download a spreadsheet.</li>
+                    <li>Or, open this application in standard Safari browser to print/save natively.</li>
+                  </ul>
+                </span>
+              </div>
+            )}
+
+            {printErrorMsg && (
+              <div className="p-3 bg-rose-50 dark:bg-rose-955/20 border border-rose-200 dark:border-rose-900/30 rounded-xl text-xs text-rose-600 dark:text-rose-400 no-print">
+                {printErrorMsg}
+              </div>
+            )}
+
+            {/* Print action buttons */}
+            <div className="flex justify-between items-center gap-2 border-b border-neutral-100 dark:border-neutral-800 pb-3 no-print">
+              <span className="text-xs text-neutral-400 italic">Review layout before exporting</span>
+              <div className="flex gap-2">
+                <Button
+                  variant="primary"
+                  onClick={() => {
+                    setPrintErrorMsg(null);
+                    try {
+                      window.print();
+                    } catch (err) {
+                      console.error('System print failed:', err);
+                      setPrintErrorMsg('System print failed or is blocked on this browser/app mode.');
+                    }
+                  }}
+                  className="py-1.5 px-3 text-xs"
+                >
+                  <Printer className="h-3.5 w-3.5" /> Trigger System Print
+                </Button>
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setIsPrintPreviewOpen(false);
+                    setPrintErrorMsg(null);
+                  }}
+                  className="py-1.5 px-3 text-xs"
+                >
+                  Close Preview
+                </Button>
+              </div>
+            </div>
+
+            {/* Print Layout Sheet */}
+            <div id="print-statement-section" className="p-1 text-neutral-900 dark:text-neutral-100">
+              <div className="flex justify-between items-center border-b-2 border-neutral-200 dark:border-neutral-800 pb-4 mb-6">
+                <div>
+                  <h1 className="text-xl font-bold tracking-wide uppercase text-neutral-950 dark:text-white">Personal Treasury Statement</h1>
+                  <span className="text-xs text-neutral-450 mt-1 block">
+                    Generated on {new Date().toLocaleDateString()} • Filtered Audit Record
+                  </span>
+                </div>
+                <div className="text-right">
+                  <div className="font-bold text-sm text-neutral-950 dark:text-white">Personal Finance</div>
+                  <span className="text-[10px] text-neutral-400">Secure Offline Ledger</span>
+                </div>
+              </div>
+
+              {/* Summary stats grid */}
+              <div className="grid grid-cols-3 gap-4 mb-6">
+                <div className="border border-neutral-200 dark:border-neutral-800 rounded-xl p-3 bg-neutral-50/50 dark:bg-neutral-900/40">
+                  <span className="text-[9px] uppercase font-bold text-neutral-400 tracking-wider">Total Credits</span>
+                  <div className="text-base font-bold text-emerald-600 dark:text-emerald-500 mt-1">
+                    +{currency}{printSummary.totalCredits.toFixed(2)}
+                  </div>
+                </div>
+                <div className="border border-neutral-200 dark:border-neutral-800 rounded-xl p-3 bg-neutral-50/50 dark:bg-neutral-900/40">
+                  <span className="text-[9px] uppercase font-bold text-neutral-400 tracking-wider">Total Expenses</span>
+                  <div className="text-base font-bold text-rose-500 dark:text-rose-400 mt-1">
+                    -{currency}{printSummary.totalExpenses.toFixed(2)}
+                  </div>
+                </div>
+                <div className="border border-neutral-200 dark:border-neutral-800 rounded-xl p-3 bg-neutral-50/50 dark:bg-neutral-900/40">
+                  <span className="text-[9px] uppercase font-bold text-neutral-400 tracking-wider">Net Cash Flow</span>
+                  <div className={`text-base font-bold mt-1 ${printSummary.netFlow >= 0 ? 'text-emerald-600 dark:text-emerald-500' : 'text-rose-500 dark:text-rose-400'}`}>
+                    {printSummary.netFlow >= 0 ? '+' : '-'}{currency}{Math.abs(printSummary.netFlow).toFixed(2)}
+                  </div>
+                </div>
+              </div>
+
+              {/* Table */}
+              <h3 className="text-xs font-bold text-neutral-700 dark:text-neutral-300 uppercase tracking-wider mb-2">
+                Transaction Audit Log ({processedTransactions.length} records)
+              </h3>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="border-b-2 border-neutral-900 dark:border-neutral-200">
+                      <th className="py-2 pr-2 font-bold text-[10px] uppercase text-neutral-400">Date</th>
+                      <th className="py-2 px-2 font-bold text-[10px] uppercase text-neutral-400">Type</th>
+                      <th className="py-2 px-2 font-bold text-[10px] uppercase text-neutral-400">Fund</th>
+                      <th className="py-2 px-2 font-bold text-[10px] uppercase text-neutral-400">Category</th>
+                      <th className="py-2 px-2 font-bold text-[10px] uppercase text-neutral-400">Notes / Details</th>
+                      <th className="py-2 pl-2 font-bold text-[10px] uppercase text-neutral-400 text-right">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-neutral-200 dark:divide-neutral-800">
+                    {processedTransactions.map((t) => {
+                      const fundName = (t as any).fundId ? getFundName((t as any).fundId) : '';
+                      const toFundName = (t as any).toFundId ? ` → ${getFundName((t as any).toFundId)}` : '';
+                      const isPositive = t.type === 'credit' || (t.type === 'adjustment' && t.amount > 0);
+                      const isTransfer = t.type === 'transfer';
+                      
+                      return (
+                        <tr key={t.id} className="border-b border-neutral-100 dark:border-neutral-850/40">
+                          <td className="py-2 pr-2 font-mono text-[10px] whitespace-nowrap">{t.date}</td>
+                          <td className="py-2 px-2 uppercase font-semibold text-[9px]">{t.type}</td>
+                          <td className="py-2 px-2 font-medium">{fundName}{toFundName}</td>
+                          <td className="py-2 px-2 text-neutral-500 dark:text-neutral-450">{t.category || 'Other'}</td>
+                          <td className="py-2 px-2 text-neutral-500 dark:text-neutral-450 truncate max-w-xs">{t.notes || '-'}</td>
+                          <td className={`py-2 pl-2 font-mono font-bold text-right ${isTransfer ? 'text-neutral-600 dark:text-neutral-400' : isPositive ? 'text-emerald-600 dark:text-emerald-500' : 'text-rose-500 dark:text-rose-400'}`}>
+                            {isTransfer ? '' : isPositive ? '+' : '-'}{currency}{Math.abs(t.amount).toFixed(2)}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
         </Dialog>
       )}
     </div>

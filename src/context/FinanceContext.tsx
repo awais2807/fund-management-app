@@ -115,6 +115,19 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   // Load data from IndexedDB (with LocalStorage migration fallback)
   useEffect(() => {
+    // Request persistent storage to protect database from silent iOS/Safari evictions
+    if (typeof navigator !== 'undefined' && navigator.storage && navigator.storage.persist) {
+      navigator.storage.persist().then((persistent) => {
+        if (persistent) {
+          console.log('[Storage] Database storage marked as PERSISTENT.');
+        } else {
+          console.warn('[Storage] Database storage is TRANSIENT (iOS may evict it under memory/idle pressure).');
+        }
+      }).catch((err) => {
+        console.error('[Storage] Error requesting persistence:', err);
+      });
+    }
+
     const loadData = async () => {
       try {
         let data = await getValue<ExportData>('finance_data');
